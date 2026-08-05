@@ -1,26 +1,41 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-paper: #fbf6ec;
+  --color-ink: #221019;
+  --color-curtain: #b3222b;
+  --color-curtain-dark: #7c171f;
+  --color-flashbulb: #f4b740;
+  --color-bubblegum: #f2789f;
+  --color-mint: #6fbfa0;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+@keyframes print-strip {
+  0% {
+    transform: translateY(-120%) rotate(0deg);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(6%) rotate(-2deg);
+    opacity: 1;
+  }
+  85% {
+    transform: translateY(-2%) rotate(1.5deg);
+  }
+  100% {
+    transform: translateY(0%) rotate(-1.5deg);
+  }
+}
+
+.animate-print-strip {
+  animation: print-strip 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }

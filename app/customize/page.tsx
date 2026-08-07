@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import html2canvas from "html2canvas-pro";
 
 type RatioId = "strip" | "portrait" | "story" | "post";
 type Slot = { xPct: number; yPct: number; wPct: number; hPct: number };
@@ -18,6 +19,7 @@ type TextEl = {
   fontId: string;
 };
 type CanvasEl = StickerEl | TextEl;
+type BgTab = "solid" | "gradient" | "pattern";
 
 const RATIO_CONFIG: Record<RatioId, { label: string; aspect: string; hasFooter: boolean }> = {
   strip: { label: "Classic Strip", aspect: "2 / 6", hasFooter: true },
@@ -26,14 +28,30 @@ const RATIO_CONFIG: Record<RatioId, { label: string; aspect: string; hasFooter: 
   post: { label: "IG Post", aspect: "1 / 1", hasFooter: false },
 };
 
-const BACKGROUNDS = [
-  { id: "paper", label: "Paper", value: "#FBF6EC" },
-  { id: "white", label: "White", value: "#FFFFFF" },
-  { id: "ink", label: "Ink", value: "#221019" },
-  { id: "curtain", label: "Curtain", value: "#B3222B" },
-  { id: "bubblegum", label: "Bubblegum", value: "#F2789F" },
-  { id: "flashbulb", label: "Flashbulb", value: "#F4B740" },
-  { id: "mint", label: "Mint", value: "#6FBFA0" },
+const SOLIDS = [
+  { id: "paper", label: "Paper", css: "#FBF6EC", dark: false },
+  { id: "white", label: "White", css: "#FFFFFF", dark: false },
+  { id: "ink", label: "Ink", css: "#221019", dark: true },
+  { id: "curtain", label: "Curtain", css: "#B3222B", dark: true },
+  { id: "bubblegum", label: "Bubblegum", css: "#F2789F", dark: false },
+  { id: "flashbulb", label: "Flashbulb", css: "#F4B740", dark: false },
+  { id: "mint", label: "Mint", css: "#6FBFA0", dark: false },
+];
+
+const GRADIENTS = [
+  { id: "sunset", label: "Sunset", css: "linear-gradient(135deg, #F2789F, #F4B740)", dark: false },
+  { id: "dusk", label: "Dusk", css: "linear-gradient(135deg, #221019, #B3222B)", dark: true },
+  { id: "ocean", label: "Ocean", css: "linear-gradient(135deg, #6FBFA0, #221019)", dark: true },
+  { id: "candy", label: "Candy", css: "linear-gradient(135deg, #F2789F, #F4B740, #6FBFA0)", dark: false },
+  { id: "peach", label: "Peach", css: "linear-gradient(160deg, #FBF6EC, #F2789F)", dark: false },
+  { id: "midnight", label: "Midnight", css: "linear-gradient(160deg, #221019, #7C171F)", dark: true },
+];
+
+const PATTERNS = [
+  { id: "dots", label: "Dots", css: "radial-gradient(#22101933 1.5px, transparent 1.5px)", size: "16px 16px", base: "#FBF6EC", dark: false },
+  { id: "dots-dark", label: "Dots Dark", css: "radial-gradient(#FBF6EC33 1.5px, transparent 1.5px)", size: "16px 16px", base: "#221019", dark: true },
+  { id: "stripes", label: "Stripes", css: "repeating-linear-gradient(45deg, #B3222B22 0 8px, transparent 8px 16px)", size: "auto", base: "#FBF6EC", dark: false },
+  { id: "grid", label: "Grid", css: "linear-gradient(#22101922 1px, transparent 1px), linear-gradient(90deg, #22101922 1px, transparent 1px)", size: "14px 14px", base: "#FFFFFF", dark: false },
 ];
 
 const STICKER_OPTIONS = ["✨", "💖", "🎀", "🫧", "🚀", "🌈", "🦋", "⭐", "🍒", "🌸", "🔥", "👑"];
@@ -45,7 +63,7 @@ const FONT_OPTIONS = [
   { id: "mono", label: "Mono", css: "var(--font-mono)" },
 ];
 
-const TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/";
+const TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/";
 
 function toTwemojiCodepoint(emoji: string): string {
   return Array.from(emoji)
@@ -55,7 +73,7 @@ function toTwemojiCodepoint(emoji: string): string {
 }
 
 function twemojiUrl(emoji: string): string {
-  return `${TWEMOJI_BASE}${toTwemojiCodepoint(emoji)}.svg`;
+  return `${TWEMOJI_BASE}${toTwemojiCodepoint(emoji)}.png`;
 }
 
 function buildLayout(ratio: RatioId, count: number): Slot[] {
@@ -109,12 +127,18 @@ export default function CustomizePage() {
 
   const [captures, setCaptures] = useState<string[]>([]);
   const [ratio, setRatio] = useState<RatioId>("strip");
-  const [background, setBackground] = useState(BACKGROUNDS[0].value);
+
+  const [bgTab, setBgTab] = useState<BgTab>("solid");
+  const [background, setBackground] = useState<{ css: string; size?: string; dark: boolean }>({
+    css: SOLIDS[0].css,
+    dark: SOLIDS[0].dark,
+  });
 
   const [elements, setElements] = useState<CanvasEl[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<{ id: string; type: "drag" | "resize" } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("pickaboo-captures");
@@ -128,7 +152,6 @@ export default function CustomizePage() {
   }, [router]);
 
   const slots = useMemo(() => buildLayout(ratio, captures.length), [ratio, captures.length]);
-  const isDark = getIsDark(background);
   const selectedEl = elements.find((el) => el.id === selectedId) ?? null;
 
   function addSticker(emoji: string) {
@@ -201,6 +224,32 @@ export default function CustomizePage() {
     setEditingId(null);
   }
 
+  async function handleDownload() {
+    if (!canvasRef.current || isExporting) return;
+    setSelectedId(null);
+    setEditingId(null);
+    setIsExporting(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    try {
+      const rendered = await html2canvas(canvasRef.current, {
+        backgroundColor: null,
+        scale: 3,
+        useCORS: true,
+      });
+      const dataUrl = rendered.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = "pickaboo-strip.png";
+      link.click();
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   if (captures.length === 0) return null;
 
   return (
@@ -215,7 +264,7 @@ export default function CustomizePage() {
       </div>
 
       <div className="flex w-full flex-col items-center justify-center gap-4 md:flex-row md:items-center md:gap-10">
-        {/* Canvas preview */}
+        {/* Canvas preview — single clipped container, nothing can render outside the card */}
         <div
           ref={canvasRef}
           onPointerDown={handleCanvasPointerDown}
@@ -223,7 +272,11 @@ export default function CustomizePage() {
           onPointerUp={handleCanvasPointerUp}
           onPointerLeave={handleCanvasPointerUp}
           className="relative h-[54vh] flex-shrink-0 touch-none overflow-hidden rounded-2xl shadow-2xl ring-1 ring-ink/10 sm:h-[64vh] md:h-[70vh]"
-          style={{ aspectRatio: RATIO_CONFIG[ratio].aspect, backgroundColor: background }}
+          style={{
+            background: background.css,
+            backgroundSize: background.size,
+            aspectRatio: RATIO_CONFIG[ratio].aspect,
+          }}
         >
           {slots.map((slot, i) => (
             <img
@@ -244,7 +297,7 @@ export default function CustomizePage() {
           {RATIO_CONFIG[ratio].hasFooter && (
             <p
               className={`absolute bottom-2 left-0 right-0 text-center font-[family-name:var(--font-mono)] text-[10px] tracking-widest ${
-                isDark ? "text-paper/50" : "text-ink/40"
+                background.dark ? "text-paper/50" : "text-ink/40"
               }`}
             >
               PICKABOO • {new Date().getFullYear()}
@@ -269,6 +322,7 @@ export default function CustomizePage() {
                     src={twemojiUrl(el.emoji)}
                     alt=""
                     draggable={false}
+                    crossOrigin="anonymous"
                     style={{ width: el.size, height: el.size }}
                     className="drop-shadow-md"
                   />
@@ -313,7 +367,7 @@ export default function CustomizePage() {
                         e.stopPropagation();
                         removeElement(el.id);
                       }}
-                      className="absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-curtain text-xs leading-none text-paper shadow-md"
+                      className="absolute right-0 top-0 flex h-6 w-6 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-curtain text-xs leading-none text-paper shadow-md"
                     >
                       ×
                     </button>
@@ -324,14 +378,14 @@ export default function CustomizePage() {
                           e.stopPropagation();
                           setEditingId(el.id);
                         }}
-                        className="absolute -left-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-mint text-xs leading-none text-ink shadow-md"
+                        className="absolute left-0 top-0 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-mint text-xs leading-none text-ink shadow-md"
                       >
                         ✎
                       </button>
                     )}
                     <div
                       onPointerDown={(e) => handleResizePointerDown(e, el.id)}
-                      className="absolute -bottom-1.5 -right-1.5 h-5 w-5 cursor-nwse-resize touch-none rounded-full bg-flashbulb shadow-md ring-2 ring-paper"
+                      className="absolute bottom-0 right-0 h-5 w-5 translate-x-1/2 translate-y-1/2 cursor-nwse-resize touch-none rounded-full bg-flashbulb shadow-md ring-2 ring-paper"
                     />
                   </>
                 )}
@@ -343,36 +397,78 @@ export default function CustomizePage() {
         {/* Tools panel */}
         <div className="flex w-full max-w-xs flex-shrink-0 flex-col items-center gap-5 md:items-start">
           <div className="w-full">
-            <p className="mb-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest text-ink/50 sm:text-xs">
-              Background
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 md:justify-start">
-              {BACKGROUNDS.map((bg) => (
+            <div className="mb-2 flex gap-3">
+              {(["solid", "gradient", "pattern"] as BgTab[]).map((tab) => (
                 <button
-                  key={bg.id}
-                  onClick={() => setBackground(bg.value)}
-                  className={`h-8 w-8 rounded-full transition-transform hover:scale-110 sm:h-10 sm:w-10 ${
-                    background === bg.value
-                      ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper"
-                      : "ring-1 ring-ink/10"
+                  key={tab}
+                  onClick={() => setBgTab(tab)}
+                  className={`font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest transition-colors sm:text-xs ${
+                    bgTab === tab ? "text-curtain" : "text-ink/40 hover:text-ink/70"
                   }`}
-                  style={{ backgroundColor: bg.value }}
-                  aria-label={bg.label}
-                />
+                >
+                  {tab}
+                </button>
               ))}
-              <label
-                className="relative flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full ring-1 ring-ink/10 transition-transform hover:scale-110 sm:h-10 sm:w-10"
-                style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
-              >
-                <input
-                  type="color"
-                  value={background}
-                  onChange={(e) => setBackground(e.target.value)}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  aria-label="Pick a custom background color"
-                />
-              </label>
             </div>
+
+            {bgTab === "solid" && (
+              <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 md:justify-start">
+                {SOLIDS.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setBackground({ css: s.css, dark: s.dark })}
+                    className={`h-8 w-8 rounded-full transition-transform hover:scale-110 sm:h-10 sm:w-10 ${
+                      background.css === s.css ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper" : "ring-1 ring-ink/10"
+                    }`}
+                    style={{ backgroundColor: s.css }}
+                    aria-label={s.label}
+                  />
+                ))}
+                <label
+                  className="relative flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full ring-1 ring-ink/10 transition-transform hover:scale-110 sm:h-10 sm:w-10"
+                  style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
+                >
+                  <input
+                    type="color"
+                    onChange={(e) => setBackground({ css: e.target.value, dark: getIsDark(e.target.value) })}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label="Pick a custom background color"
+                  />
+                </label>
+              </div>
+            )}
+
+            {bgTab === "gradient" && (
+              <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 md:justify-start">
+                {GRADIENTS.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => setBackground({ css: g.css, dark: g.dark })}
+                    className={`h-8 w-8 rounded-full transition-transform hover:scale-110 sm:h-10 sm:w-10 ${
+                      background.css === g.css ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper" : "ring-1 ring-ink/10"
+                    }`}
+                    style={{ background: g.css }}
+                    aria-label={g.label}
+                  />
+                ))}
+              </div>
+            )}
+
+            {bgTab === "pattern" && (
+              <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 md:justify-start">
+                {PATTERNS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setBackground({ css: `${p.css}, ${p.base}`, size: p.size, dark: p.dark })}
+                    className={`h-8 w-8 rounded-full transition-transform hover:scale-110 sm:h-10 sm:w-10 ${
+                      background.css === `${p.css}, ${p.base}` ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper" : "ring-1 ring-ink/10"
+                    }`}
+                    style={{ background: `${p.css}, ${p.base}`, backgroundSize: p.size }}
+                    aria-label={p.label}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="w-full">
@@ -413,9 +509,7 @@ export default function CustomizePage() {
                     onClick={() => updateTextField(selectedEl.id, "fontId", f.id)}
                     style={{ fontFamily: f.css }}
                     className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
-                      selectedEl.fontId === f.id
-                        ? "bg-curtain text-paper"
-                        : "bg-paper text-ink ring-1 ring-ink/10"
+                      selectedEl.fontId === f.id ? "bg-curtain text-paper" : "bg-paper text-ink ring-1 ring-ink/10"
                     }`}
                   >
                     {f.label}
@@ -423,17 +517,15 @@ export default function CustomizePage() {
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {BACKGROUNDS.map((bg) => (
+                {SOLIDS.map((s) => (
                   <button
-                    key={bg.id}
-                    onClick={() => updateTextField(selectedEl.id, "color", bg.value)}
+                    key={s.id}
+                    onClick={() => updateTextField(selectedEl.id, "color", s.css)}
                     className={`h-6 w-6 rounded-full transition-transform hover:scale-110 ${
-                      selectedEl.color === bg.value
-                        ? "ring-2 ring-curtain ring-offset-2 ring-offset-white"
-                        : "ring-1 ring-ink/10"
+                      selectedEl.color === s.css ? "ring-2 ring-curtain ring-offset-2 ring-offset-white" : "ring-1 ring-ink/10"
                     }`}
-                    style={{ backgroundColor: bg.value }}
-                    aria-label={bg.label}
+                    style={{ backgroundColor: s.css }}
+                    aria-label={s.label}
                   />
                 ))}
                 <label
@@ -451,6 +543,14 @@ export default function CustomizePage() {
               </div>
             </div>
           )}
+
+          <button
+            onClick={handleDownload}
+            disabled={isExporting}
+            className="w-full rounded-full bg-flashbulb px-6 py-3.5 font-[family-name:var(--font-display)] text-base text-ink shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+          >
+            {isExporting ? "Preparing…" : "⬇ Download"}
+          </button>
         </div>
       </div>
     </main>

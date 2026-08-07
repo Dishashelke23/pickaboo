@@ -5,13 +5,19 @@ import { useRouter } from "next/navigation";
 
 type RatioId = "strip" | "portrait" | "story" | "post";
 type Slot = { xPct: number; yPct: number; wPct: number; hPct: number };
-type StickerEl = {
+
+type StickerEl = { id: string; kind: "sticker"; emoji: string; xPct: number; yPct: number; size: number };
+type TextEl = {
   id: string;
-  emoji: string;
+  kind: "text";
+  text: string;
   xPct: number;
   yPct: number;
   size: number;
+  color: string;
+  fontId: string;
 };
+type CanvasEl = StickerEl | TextEl;
 
 const RATIO_CONFIG: Record<RatioId, { label: string; aspect: string; hasFooter: boolean }> = {
   strip: { label: "Classic Strip", aspect: "2 / 6", hasFooter: true },
@@ -31,6 +37,13 @@ const BACKGROUNDS = [
 ];
 
 const STICKER_OPTIONS = ["✨", "💖", "🎀", "🫧", "🚀", "🌈", "🦋", "⭐", "🍒", "🌸", "🔥", "👑"];
+
+const FONT_OPTIONS = [
+  { id: "display", label: "Bungee", css: "var(--font-display)" },
+  { id: "script", label: "Caveat", css: "var(--font-script)" },
+  { id: "body", label: "DM Sans", css: "var(--font-body)" },
+  { id: "mono", label: "Mono", css: "var(--font-mono)" },
+];
 
 const TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/";
 
@@ -98,8 +111,9 @@ export default function CustomizePage() {
   const [ratio, setRatio] = useState<RatioId>("strip");
   const [background, setBackground] = useState(BACKGROUNDS[0].value);
 
-  const [stickers, setStickers] = useState<StickerEl[]>([]);
+  const [elements, setElements] = useState<CanvasEl[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<{ id: string; type: "drag" | "resize" } | null>(null);
 
   useEffect(() => {
@@ -115,19 +129,37 @@ export default function CustomizePage() {
 
   const slots = useMemo(() => buildLayout(ratio, captures.length), [ratio, captures.length]);
   const isDark = getIsDark(background);
+  const selectedEl = elements.find((el) => el.id === selectedId) ?? null;
 
   function addSticker(emoji: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setStickers((prev) => [...prev, { id, emoji, xPct: 50, yPct: 50, size: 44 }]);
+    setElements((prev) => [...prev, { id, kind: "sticker", emoji, xPct: 50, yPct: 50, size: 44 }]);
     setSelectedId(id);
   }
 
-  function removeSticker(id: string) {
-    setStickers((prev) => prev.filter((s) => s.id !== id));
-    setSelectedId(null);
+  function addText() {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setElements((prev) => [
+      ...prev,
+      { id, kind: "text", text: "your text", xPct: 50, yPct: 50, size: 28, color: "#221019", fontId: "display" },
+    ]);
+    setSelectedId(id);
+    setEditingId(id);
   }
 
-  function handleStickerPointerDown(e: React.PointerEvent, id: string) {
+  function removeElement(id: string) {
+    setElements((prev) => prev.filter((el) => el.id !== id));
+    setSelectedId(null);
+    setEditingId(null);
+  }
+
+  function updateTextField<K extends keyof TextEl>(id: string, key: K, value: TextEl[K]) {
+    setElements((prev) =>
+      prev.map((el) => (el.id === id && el.kind === "text" ? { ...el, [key]: value } : el))
+    );
+  }
+
+  function handleElementPointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     setActiveAction({ id, type: "drag" });
@@ -145,16 +177,17 @@ export default function CustomizePage() {
     if (!activeAction || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
 
-    setStickers((prev) =>
-      prev.map((s) => {
-        if (s.id !== activeAction.id) return s;
+    setElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== activeAction.id) return el;
         if (activeAction.type === "drag") {
           const xPct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
           const yPct = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
-          return { ...s, xPct, yPct };
+          return { ...el, xPct, yPct };
         }
-        const newSize = Math.min(160, Math.max(20, s.size + e.movementY));
-        return { ...s, size: newSize };
+        const max = el.kind === "text" ? 72 : 160;
+        const newSize = Math.min(max, Math.max(14, el.size + e.movementY));
+        return { ...el, size: newSize };
       })
     );
   }
@@ -164,9 +197,8 @@ export default function CustomizePage() {
   }
 
   function handleCanvasPointerDown() {
-    // Stickers already stopPropagation on their own pointerdown,
-    // so this only fires for taps on empty canvas / photos / footer.
     setSelectedId(null);
+    setEditingId(null);
   }
 
   if (captures.length === 0) return null;
@@ -219,51 +251,97 @@ export default function CustomizePage() {
             </p>
           )}
 
-          {stickers.map((s) => (
-            <div
-              key={s.id}
-              onPointerDown={(e) => handleStickerPointerDown(e, s.id)}
-              style={{
-                left: `${s.xPct}%`,
-                top: `${s.yPct}%`,
-                width: s.size,
-                height: s.size,
-                transform: "translate(-50%, -50%)",
-              }}
-              className={`absolute z-10 cursor-grab touch-none select-none active:cursor-grabbing ${
-                selectedId === s.id ? "outline-dashed outline-2 outline-curtain outline-offset-4" : ""
-              }`}
-            >
-              <img
-                src={twemojiUrl(s.emoji)}
-                alt=""
-                draggable={false}
-                className="h-full w-full drop-shadow-md"
-              />
-              {selectedId === s.id && (
-                <>
-                  <button
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeSticker(s.id);
-                    }}
-                    className="absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-curtain text-xs leading-none text-paper shadow-md"
-                  >
-                    ×
-                  </button>
-                  <div
-                    onPointerDown={(e) => handleResizePointerDown(e, s.id)}
-                    className="absolute -bottom-1.5 -right-1.5 h-5 w-5 cursor-nwse-resize touch-none rounded-full bg-flashbulb shadow-md ring-2 ring-paper"
+          {elements.map((el) => {
+            const isSelected = selectedId === el.id;
+            const isEditing = editingId === el.id;
+
+            return (
+              <div
+                key={el.id}
+                onPointerDown={(e) => !isEditing && handleElementPointerDown(e, el.id)}
+                style={{ left: `${el.xPct}%`, top: `${el.yPct}%`, transform: "translate(-50%, -50%)" }}
+                className={`absolute z-10 select-none ${isEditing ? "" : "touch-none cursor-grab active:cursor-grabbing"} ${
+                  isSelected ? "outline-dashed outline-2 outline-curtain outline-offset-4" : ""
+                }`}
+              >
+                {el.kind === "sticker" && (
+                  <img
+                    src={twemojiUrl(el.emoji)}
+                    alt=""
+                    draggable={false}
+                    style={{ width: el.size, height: el.size }}
+                    className="drop-shadow-md"
                   />
-                </>
-              )}
-            </div>
-          ))}
+                )}
+
+                {el.kind === "text" && !isEditing && (
+                  <p
+                    style={{
+                      fontFamily: FONT_OPTIONS.find((f) => f.id === el.fontId)?.css,
+                      color: el.color,
+                      fontSize: el.size,
+                    }}
+                    className="whitespace-nowrap px-1 leading-tight"
+                  >
+                    {el.text || "double-tap ✎"}
+                  </p>
+                )}
+
+                {el.kind === "text" && isEditing && (
+                  <input
+                    autoFocus
+                    value={el.text}
+                    onChange={(e) => updateTextField(el.id, "text", e.target.value)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onBlur={() => setEditingId(null)}
+                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                    style={{
+                      fontFamily: FONT_OPTIONS.find((f) => f.id === el.fontId)?.css,
+                      color: el.color,
+                      fontSize: el.size,
+                      width: `${Math.max(4, el.text.length + 2)}ch`,
+                    }}
+                    className="border-b-2 border-dashed border-curtain bg-transparent text-center outline-none"
+                  />
+                )}
+
+                {isSelected && !isEditing && (
+                  <>
+                    <button
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeElement(el.id);
+                      }}
+                      className="absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-curtain text-xs leading-none text-paper shadow-md"
+                    >
+                      ×
+                    </button>
+                    {el.kind === "text" && (
+                      <button
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(el.id);
+                        }}
+                        className="absolute -left-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-mint text-xs leading-none text-ink shadow-md"
+                      >
+                        ✎
+                      </button>
+                    )}
+                    <div
+                      onPointerDown={(e) => handleResizePointerDown(e, el.id)}
+                      className="absolute -bottom-1.5 -right-1.5 h-5 w-5 cursor-nwse-resize touch-none rounded-full bg-flashbulb shadow-md ring-2 ring-paper"
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Tools panel */}
-        <div className="flex w-full max-w-xs flex-shrink-0 flex-col items-center gap-6 md:items-start">
+        <div className="flex w-full max-w-xs flex-shrink-0 flex-col items-center gap-5 md:items-start">
           <div className="w-full">
             <p className="mb-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest text-ink/50 sm:text-xs">
               Background
@@ -282,7 +360,6 @@ export default function CustomizePage() {
                   aria-label={bg.label}
                 />
               ))}
-
               <label
                 className="relative flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full ring-1 ring-ink/10 transition-transform hover:scale-110 sm:h-10 sm:w-10"
                 style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
@@ -300,7 +377,7 @@ export default function CustomizePage() {
 
           <div className="w-full">
             <p className="mb-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest text-ink/50 sm:text-xs">
-              Stickers — tap to add
+              Stickers
             </p>
             <div className="grid grid-cols-6 gap-2 md:grid-cols-4">
               {STICKER_OPTIONS.map((emoji) => (
@@ -313,10 +390,67 @@ export default function CustomizePage() {
                 </button>
               ))}
             </div>
-            <p className="mt-2 font-[family-name:var(--font-mono)] text-[10px] text-ink/40">
-              drag to move • gold dot to resize • × to delete
-            </p>
           </div>
+
+          <div className="w-full">
+            <button
+              onClick={addText}
+              className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-ink ring-1 ring-ink/10 transition-transform hover:scale-[1.02] active:scale-95"
+            >
+              + Add text
+            </button>
+          </div>
+
+          {selectedEl?.kind === "text" && (
+            <div className="w-full rounded-xl bg-white/60 p-3 ring-1 ring-ink/10">
+              <p className="mb-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest text-ink/50">
+                Text style
+              </p>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {FONT_OPTIONS.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => updateTextField(selectedEl.id, "fontId", f.id)}
+                    style={{ fontFamily: f.css }}
+                    className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                      selectedEl.fontId === f.id
+                        ? "bg-curtain text-paper"
+                        : "bg-paper text-ink ring-1 ring-ink/10"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {BACKGROUNDS.map((bg) => (
+                  <button
+                    key={bg.id}
+                    onClick={() => updateTextField(selectedEl.id, "color", bg.value)}
+                    className={`h-6 w-6 rounded-full transition-transform hover:scale-110 ${
+                      selectedEl.color === bg.value
+                        ? "ring-2 ring-curtain ring-offset-2 ring-offset-white"
+                        : "ring-1 ring-ink/10"
+                    }`}
+                    style={{ backgroundColor: bg.value }}
+                    aria-label={bg.label}
+                  />
+                ))}
+                <label
+                  className="relative flex h-6 w-6 cursor-pointer items-center justify-center overflow-hidden rounded-full ring-1 ring-ink/10"
+                  style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
+                >
+                  <input
+                    type="color"
+                    value={selectedEl.color}
+                    onChange={(e) => updateTextField(selectedEl.id, "color", e.target.value)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label="Pick a custom text color"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </main>

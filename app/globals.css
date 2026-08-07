@@ -12,6 +12,7 @@
   --font-display: var(--font-display);
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
+  --font-script: var(--font-script);
 }
 
 body {

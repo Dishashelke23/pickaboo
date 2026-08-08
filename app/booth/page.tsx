@@ -180,7 +180,7 @@ function BoothContent() {
   }
 
   return (
-    <main className="relative mx-auto flex h-dvh w-full max-w-6xl flex-col items-center justify-center overflow-hidden px-4 py-3">
+    <main className="relative mx-auto flex h-dvh w-full max-w-6xl flex-col items-center justify-center overflow-hidden px-3 py-3 sm:px-4">
       <button
         onClick={() => router.push(retakeIndex !== null ? "/review" : "/")}
         disabled={isCapturing}
@@ -199,133 +199,136 @@ function BoothContent() {
         </h1>
       </div>
 
-      <div className="flex h-[58vh] w-full items-stretch justify-center gap-3 sm:h-[66vh] sm:gap-6 md:h-[72vh] md:gap-8">
-        <div className="flex h-full min-h-0 flex-col items-center gap-3 overflow-y-auto px-2 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {FILTERS.map((f) => {
-            const isSelected = selectedFilter.id === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => !isCapturing && setSelectedFilter(f)}
-                disabled={isCapturing}
-                className="group flex flex-shrink-0 flex-col items-center gap-0.5 disabled:opacity-40"
-              >
-                <span
-                  style={{ filter: f.css }}
-                  className={`h-8 w-8 rounded-full bg-gradient-to-br from-bubblegum via-flashbulb to-mint transition-all duration-200 ease-out group-hover:scale-110 sm:h-9 sm:w-9 md:h-10 md:w-10 ${
-                    isSelected
-                      ? "scale-110 ring-4 ring-curtain ring-offset-2 ring-offset-paper"
-                      : "ring-1 ring-ink/10"
-                  }`}
-                />
-                <span
-                  className={`hidden font-[family-name:var(--font-mono)] text-[9px] text-ink/60 transition-opacity duration-200 sm:block ${
-                    isSelected ? "opacity-30" : "opacity-100"
-                  }`}
-                >
-                  {f.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="relative aspect-[3/4] h-full flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            style={{ filter: selectedFilter.css }}
-            className={`h-full w-full object-cover transition-opacity duration-300 ${
-              status === "ready" ? "opacity-100" : "opacity-0"
-            } ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
-          />
-
-          {status === "requesting" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-paper">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-paper/30 border-t-flashbulb" />
-              <p className="font-[family-name:var(--font-body)] text-sm">
-                Asking for camera access…
-              </p>
-            </div>
-          )}
-
-          {status === "denied" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-paper">
-              <p className="font-[family-name:var(--font-body)] text-sm">
-                Camera access was denied. Enable it in your browser&apos;s site
-                settings, then try again.
-              </p>
-              <button
-                onClick={() => setRetryCount((c) => c + 1)}
-                className="rounded-full bg-flashbulb px-5 py-2 text-sm font-medium text-ink"
-              >
-                Try again
-              </button>
-            </div>
-          )}
-
-          {status === "no-camera" && (
-            <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-paper">
-              <p className="font-[family-name:var(--font-body)] text-sm">
-                No camera was found on this device.
-              </p>
-            </div>
-          )}
-
-          {status === "error" && (
-            <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-paper">
-              <p className="font-[family-name:var(--font-body)] text-sm">
-                Something went wrong starting the camera.
-              </p>
-            </div>
-          )}
-
-          {countdown !== null && (
-            <div className="absolute inset-0 flex items-center justify-center bg-ink/30">
-              <span
-                key={countdown}
-                className="animate-[pop_0.9s_ease-out] font-[family-name:var(--font-display)] text-8xl text-paper drop-shadow-lg"
-              >
-                {countdown}
-              </span>
-            </div>
-          )}
-
-          <div
-            className={`pointer-events-none absolute inset-0 bg-white transition-opacity duration-150 ${
-              flash ? "opacity-90" : "opacity-0"
+      <div className="flex h-[min(50vh,64vw)] w-full items-stretch justify-center gap-2 sm:h-[min(62vh,46vw)] sm:gap-4 md:h-[min(70vh,40vw)] md:gap-8">
+  {/* Filters */}
+  <div className="flex h-full min-h-0 flex-col items-center gap-2 overflow-y-auto px-1.5 py-2 sm:gap-3 sm:px-2 sm:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    {FILTERS.map((f) => {
+      const isSelected = selectedFilter.id === f.id;
+      return (
+        <button
+          key={f.id}
+          onClick={() => !isCapturing && setSelectedFilter(f)}
+          disabled={isCapturing}
+          className="group flex flex-shrink-0 flex-col items-center gap-0.5 disabled:opacity-40"
+        >
+          <span
+            style={{ filter: f.css }}
+            className={`h-7 w-7 rounded-full bg-gradient-to-br from-bubblegum via-flashbulb to-mint transition-all duration-200 ease-out group-hover:scale-110 sm:h-9 sm:w-9 md:h-10 md:w-10 ${
+              isSelected
+                ? "scale-110 ring-4 ring-curtain ring-offset-2 ring-offset-paper"
+                : "ring-1 ring-ink/10"
             }`}
           />
-        </div>
-
-        <div className="flex h-full flex-shrink-0 flex-col items-center justify-center gap-3">
-          <button
-            onClick={runSession}
-            disabled={isCapturing || status !== "ready"}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-curtain shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 sm:h-14 sm:w-14 md:h-16 md:w-16"
+          <span
+            className={`hidden font-[family-name:var(--font-mono)] text-[9px] text-ink/60 transition-opacity duration-200 md:block ${
+              isSelected ? "opacity-30" : "opacity-100"
+            }`}
           >
-            <span className="h-8 w-8 rounded-full border-4 border-paper sm:h-9 sm:w-9 md:h-11 md:w-11" />
-          </button>
-          <span className="font-[family-name:var(--font-mono)] text-[9px] text-ink/60 sm:text-[10px]">
-            {isCapturing ? `${captured.length}/${totalShots}` : "start"}
+            {f.label}
           </span>
+        </button>
+      );
+    })}
+  </div>
 
-          {hasMultipleCameras && (
-            <button
-              onClick={() =>
-                !isCapturing &&
-                setFacingMode((f) => (f === "user" ? "environment" : "user"))
-              }
-              disabled={isCapturing}
-              className="mt-1 rounded-full border-2 border-ink/10 bg-white p-2 text-xs hover:border-curtain/40 disabled:opacity-40"
-            >
-              🔄
-            </button>
-          )}
-        </div>
+        {/* Camera frame */}
+  <div className="relative aspect-[3/4] h-full flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8">
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      style={{ filter: selectedFilter.css }}
+      className={`h-full w-full object-cover transition-opacity duration-300 ${
+        status === "ready" ? "opacity-100" : "opacity-0"
+      } ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
+    />
+
+    {status === "requesting" && (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-paper">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-paper/30 border-t-flashbulb" />
+        <p className="font-[family-name:var(--font-body)] text-sm">
+          Asking for camera access…
+        </p>
       </div>
+    )}
+
+    {status === "denied" && (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-paper">
+        <p className="font-[family-name:var(--font-body)] text-sm">
+          Camera access was denied. Enable it in your browser&apos;s site
+          settings, then try again.
+        </p>
+        <button
+          onClick={() => setRetryCount((c) => c + 1)}
+          className="rounded-full bg-flashbulb px-5 py-2 text-sm font-medium text-ink"
+        >
+          Try again
+        </button>
+      </div>
+    )}
+
+    {status === "no-camera" && (
+      <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-paper">
+        <p className="font-[family-name:var(--font-body)] text-sm">
+          No camera was found on this device.
+        </p>
+      </div>
+    )}
+
+    {status === "error" && (
+      <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-paper">
+        <p className="font-[family-name:var(--font-body)] text-sm">
+          Something went wrong starting the camera.
+        </p>
+      </div>
+    )}
+
+    {countdown !== null && (
+      <div className="absolute inset-0 flex items-center justify-center bg-ink/30">
+        <span
+          key={countdown}
+          className="animate-[pop_0.9s_ease-out] font-[family-name:var(--font-display)] text-8xl text-paper drop-shadow-lg"
+        >
+          {countdown}
+        </span>
+      </div>
+    )}
+
+    <div
+      className={`pointer-events-none absolute inset-0 bg-white transition-opacity duration-150 ${
+        flash ? "opacity-90" : "opacity-0"
+      }`}
+    />
+  </div>
+
+  {/* Shutter */}
+  <div className="flex h-full flex-shrink-0 flex-col items-center justify-center gap-2 sm:gap-3">
+    <button
+      onClick={runSession}
+      disabled={isCapturing || status !== "ready"}
+      className="flex h-11 w-11 items-center justify-center rounded-full bg-curtain shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 sm:h-12 sm:w-12 md:h-16 md:w-16"
+    >
+      <span className="h-7 w-7 rounded-full border-4 border-paper sm:h-8 sm:w-8 md:h-11 md:w-11" />
+    </button>
+    <span className="font-[family-name:var(--font-mono)] text-[9px] text-ink/60 sm:text-[10px]">
+      {isCapturing ? `${captured.length}/${totalShots}` : "start"}
+    </span>
+
+    {hasMultipleCameras && (
+      <button
+        onClick={() =>
+          !isCapturing &&
+          setFacingMode((f) => (f === "user" ? "environment" : "user"))
+        }
+        disabled={isCapturing}
+        className="mt-1 rounded-full border-2 border-ink/10 bg-white p-2 text-xs hover:border-curtain/40 disabled:opacity-40"
+      >
+        🔄
+      </button>
+    )}
+  </div>
+</div>
 
       <p className="mt-2 font-[family-name:var(--font-mono)] text-[10px] text-ink/50 sm:text-xs">
         {retakeIndex !== null ? `Retaking shot ${retakeIndex + 1}` : `${shots} shots queued`}

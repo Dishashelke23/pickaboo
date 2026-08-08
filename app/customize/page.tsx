@@ -121,6 +121,14 @@ function getIsDark(hex: string): boolean {
   return luminance < 0.55;
 }
 
+function isIOSDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = window.navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isIPadOS = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return isIOS || isIPadOS;
+}
+
 export default function CustomizePage() {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -139,6 +147,7 @@ export default function CustomizePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<{ id: string; type: "drag" | "resize" } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("pickaboo-captures");
@@ -238,11 +247,22 @@ export default function CustomizePage() {
         scale: 3,
         useCORS: true,
       });
-      const dataUrl = rendered.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = "pickaboo-strip.png";
-      link.click();
+
+      if (isIOSDevice()) {
+        setPreviewImage(rendered.toDataURL("image/png"));
+      } else {
+        rendered.toBlob((blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "pickaboo-strip.png";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }, "image/png");
+      }
     } catch (err) {
       console.error("Export failed:", err);
     } finally {
@@ -253,8 +273,8 @@ export default function CustomizePage() {
   if (captures.length === 0) return null;
 
   return (
-    <main className="relative mx-auto flex h-dvh w-full max-w-5xl flex-col items-center justify-center overflow-hidden px-4 py-3">
-      <div className="mb-4 mt-2 flex flex-col items-center sm:mb-6 sm:mt-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-5xl flex-col items-center overflow-y-auto px-4 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mb-4 flex flex-col items-center sm:mb-6">
         <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.2em] text-curtain sm:text-xs">
           step 3 of 3
         </span>
@@ -263,15 +283,15 @@ export default function CustomizePage() {
         </h1>
       </div>
 
-      <div className="flex w-full flex-col items-center justify-center gap-4 md:flex-row md:items-center md:gap-10">
-        {/* Canvas preview — single clipped container, nothing can render outside the card */}
+      <div className="flex w-full flex-col items-center gap-6 md:flex-row md:items-start md:justify-center md:gap-10">
+        {/* Canvas preview — width-driven, safe on any screen size */}
         <div
           ref={canvasRef}
           onPointerDown={handleCanvasPointerDown}
           onPointerMove={handleCanvasPointerMove}
           onPointerUp={handleCanvasPointerUp}
           onPointerLeave={handleCanvasPointerUp}
-          className="relative h-[54vh] flex-shrink-0 touch-none overflow-hidden rounded-2xl shadow-2xl ring-1 ring-ink/10 sm:h-[64vh] md:h-[70vh]"
+          className="relative w-[68vw] max-w-[300px] flex-shrink-0 touch-none overflow-hidden rounded-2xl shadow-2xl ring-1 ring-ink/10 sm:w-[42vw] sm:max-w-[340px] md:w-[380px]"
           style={{
             background: background.css,
             backgroundSize: background.size,
@@ -395,7 +415,7 @@ export default function CustomizePage() {
         </div>
 
         {/* Tools panel */}
-        <div className="flex w-full max-w-xs flex-shrink-0 flex-col items-center gap-5 md:items-start">
+        <div className="flex w-full max-w-xs flex-shrink-0 flex-col items-center gap-5 pb-8 md:items-start">
           <div className="w-full">
             <div className="mb-2 flex gap-3">
               {(["solid", "gradient", "pattern"] as BgTab[]).map((tab) => (
@@ -553,6 +573,26 @@ export default function CustomizePage() {
           </button>
         </div>
       </div>
+
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-ink/95 px-6 py-10">
+          <p className="max-w-xs text-center font-[family-name:var(--font-body)] text-sm text-paper">
+            Press and hold the image below, then tap <strong>Save Image</strong> to
+            add it to your Photos.
+          </p>
+          <img
+            src={previewImage}
+            alt="Your Pickaboo strip"
+            className="max-h-[65vh] rounded-xl shadow-2xl"
+          />
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="rounded-full bg-flashbulb px-6 py-2.5 text-sm font-medium text-ink"
+          >
+            Done
+          </button>
+        </div>
+      )}
     </main>
   );
 }

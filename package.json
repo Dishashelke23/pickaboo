@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "face-api.js": "^0.22.2",
+    "gif.js": "^0.2.0",
     "html2canvas-pro": "^2.3.3",
     "next": "16.3.0",
     "react": "19.2.8",

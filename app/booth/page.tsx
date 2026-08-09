@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getLayout } from "../layouts";
 
 type CameraStatus = "idle" | "requesting" | "ready" | "denied" | "no-camera" | "error";
 
@@ -198,8 +199,7 @@ function applyFilterOps(imageData: ImageData, ops: FilterOp[]) {
 function BoothContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const shots = searchParams.get("shots") ?? "3";
-  const ratio = searchParams.get("ratio") ?? "strip";
+  const layout = getLayout(searchParams.get("layout"));
   const filterParam = searchParams.get("filter");
   const retakeParam = searchParams.get("retake");
   const retakeIndex = retakeParam !== null ? parseInt(retakeParam, 10) : null;
@@ -223,7 +223,7 @@ function BoothContent() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [captured, setCaptured] = useState<string[]>([]);
 
-  const totalShots = retakeIndex !== null ? 1 : parseInt(shots, 10) || 3;
+  const totalShots = retakeIndex !== null ? 1 : layout.poses;
 
   useEffect(() => {
     navigator.mediaDevices
@@ -300,8 +300,6 @@ function BoothContent() {
     ctx.drawImage(video, 0, 0, width, height);
     ctx.restore();
 
-    // Apply the filter manually via pixel math instead of ctx.filter,
-    // since ctx.filter support is unreliable on iOS Safari.
     if (selectedFilter.ops.length > 0) {
       const imageData = ctx.getImageData(0, 0, width, height);
       applyFilterOps(imageData, selectedFilter.ops);
@@ -342,7 +340,7 @@ function BoothContent() {
       sessionStorage.setItem("pickaboo-captures", JSON.stringify(existing));
     } else {
       sessionStorage.setItem("pickaboo-captures", JSON.stringify(newCaptures));
-      sessionStorage.setItem("pickaboo-ratio", ratio);
+      sessionStorage.setItem("pickaboo-layout", layout.id);
       sessionStorage.setItem("pickaboo-filter", selectedFilter.id);
     }
 
@@ -511,7 +509,7 @@ function BoothContent() {
       </div>
 
       <p className="mt-2 font-[family-name:var(--font-mono)] text-[10px] text-ink/50 sm:text-xs">
-        {retakeIndex !== null ? `Retaking shot ${retakeIndex + 1}` : `${shots} shots queued`}
+        {retakeIndex !== null ? `Retaking shot ${retakeIndex + 1}` : `${layout.poses} shots queued`}
       </p>
 
       <canvas ref={canvasRef} className="hidden" />

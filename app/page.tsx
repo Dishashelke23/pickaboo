@@ -2,17 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-type Ratio = { id: string; label: string; hint: string };
-
-const RATIOS: Ratio[] = [
-  { id: "strip", label: "Classic Strip", hint: "2×6" },
-  { id: "portrait", label: "Portrait", hint: "4×5" },
-  { id: "story", label: "IG Story", hint: "9×16" },
-  { id: "post", label: "IG Post", hint: "1×1" },
-];
-
-const SHOT_COUNTS: number[] = [3, 4, 6];
+import { LAYOUTS, LayoutOption } from "./layouts";
 
 function PrintedStrip() {
   const frames = ["bg-bubblegum/30", "bg-flashbulb/30", "bg-mint/30", "bg-curtain/20"];
@@ -40,33 +30,45 @@ function PrintedStrip() {
   );
 }
 
-function OptionCard({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function LayoutPreview({ layout }: { layout: LayoutOption }) {
+  const tints = [
+    "bg-bubblegum/40",
+    "bg-flashbulb/40",
+    "bg-mint/40",
+    "bg-curtain/30",
+    "bg-ink/10",
+    "bg-bubblegum/25",
+  ];
   return (
-    <button
-      onClick={onClick}
-      className={`rounded-xl border-2 px-4 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-curtain focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
-        selected
-          ? "border-curtain bg-curtain text-paper shadow-md"
-          : "border-ink/10 bg-white text-ink hover:border-curtain/40"
-      }`}
+    <div
+      className="relative w-full overflow-hidden rounded-md border border-ink/10 bg-white p-1.5 shadow-sm"
+      style={{ aspectRatio: layout.aspect }}
     >
-      {children}
-    </button>
+      <div
+        className="grid h-full w-full gap-1"
+        style={{
+          gridTemplateColumns: `repeat(${layout.cols}, 1fr)`,
+          gridTemplateRows: `repeat(${layout.rows}, 1fr)`,
+        }}
+      >
+        {Array.from({ length: layout.poses }, (_, i) => (
+          <div key={i} className={`rounded-sm ${tints[i % tints.length]}`} />
+        ))}
+      </div>
+      {layout.themeOverlay === "hearts" && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-around py-2 text-sm">
+          <span>💖</span>
+          <span>💖</span>
+          <span>💖</span>
+        </div>
+      )}
+    </div>
   );
 }
 
 export default function Home() {
   const router = useRouter();
-  const [ratio, setRatio] = useState<string>("strip");
-  const [shots, setShots] = useState<number>(3);
+  const [selectedLayoutId, setSelectedLayoutId] = useState<string>(LAYOUTS[0].id);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12 md:py-20">
@@ -90,49 +92,41 @@ export default function Home() {
       </div>
 
       <div className="mt-16 rounded-3xl bg-white/60 p-6 ring-1 ring-ink/10 md:p-10">
-        <div className="grid gap-8 md:grid-cols-2">
-          <div>
-            <p className="font-[family-name:var(--font-mono)] text-xs tracking-widest text-curtain">
-              01
-            </p>
-            <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-ink">
-              Pick a shape
-            </h2>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {RATIOS.map((r) => (
-                <OptionCard
-                  key={r.id}
-                  selected={ratio === r.id}
-                  onClick={() => setRatio(r.id)}
-                >
-                  <span className="block text-sm font-medium">{r.label}</span>
-                  <span className="block text-xs opacity-70">{r.hint}</span>
-                </OptionCard>
-              ))}
-            </div>
-          </div>
+        <p className="font-[family-name:var(--font-mono)] text-xs tracking-widest text-curtain">
+          01
+        </p>
+        <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-ink">
+          Pick a layout
+        </h2>
 
-          <div>
-            <p className="font-[family-name:var(--font-mono)] text-xs tracking-widest text-curtain">
-              02
-            </p>
-            <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-ink">
-              How many shots?
-            </h2>
-            <div className="mt-4 flex gap-2">
-              {SHOT_COUNTS.map((n) => (
-                <OptionCard key={n} selected={shots === n} onClick={() => setShots(n)}>
-                  <span className="block text-sm font-medium">{n}</span>
-                </OptionCard>
-              ))}
-            </div>
-          </div>
+        <div className="mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {LAYOUTS.map((layout) => (
+            <button
+              key={layout.id}
+              onClick={() => setSelectedLayoutId(layout.id)}
+              className={`flex w-32 flex-shrink-0 snap-center flex-col gap-2 rounded-xl border-2 p-2 text-left transition-all sm:w-36 ${
+                selectedLayoutId === layout.id
+                  ? "border-curtain bg-curtain/5 shadow-md"
+                  : "border-ink/10 bg-white hover:border-curtain/40"
+              }`}
+            >
+              <LayoutPreview layout={layout} />
+              <div>
+                <p className="font-[family-name:var(--font-body)] text-xs font-semibold text-ink">
+                  {layout.name}
+                </p>
+                <p className="font-[family-name:var(--font-mono)] text-[10px] text-ink/50">
+                  {layout.sizeLabel} ({layout.poses} Pose)
+                </p>
+              </div>
+            </button>
+          ))}
         </div>
 
-        <div className="mt-10 flex justify-center">
+        <div className="mt-8 flex justify-center">
           <button
             className="rounded-full bg-flashbulb px-10 py-4 font-[family-name:var(--font-display)] text-lg text-ink shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-curtain focus-visible:ring-offset-2"
-            onClick={() => router.push(`/booth?ratio=${ratio}&shots=${shots}`)}
+            onClick={() => router.push(`/booth?layout=${selectedLayoutId}`)}
           >
             Start Snapping
           </button>

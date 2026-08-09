@@ -6,25 +6,25 @@ import { useRouter } from "next/navigation";
 export default function ReviewPage() {
   const router = useRouter();
   const [captures, setCaptures] = useState<string[]>([]);
-  const [ratio, setRatio] = useState("strip");
-  const [filter, setFilter] = useState("classic");
+  const [layoutId, setLayoutId] = useState("classic");
+  const [filter, setFilter] = useState("noir");
 
   useEffect(() => {
     const stored = sessionStorage.getItem("pickaboo-captures");
-    const storedRatio = sessionStorage.getItem("pickaboo-ratio");
+    const storedLayout = sessionStorage.getItem("pickaboo-layout");
     const storedFilter = sessionStorage.getItem("pickaboo-filter");
     if (stored) setCaptures(JSON.parse(stored));
-    if (storedRatio) setRatio(storedRatio);
+    if (storedLayout) setLayoutId(storedLayout);
     if (storedFilter) setFilter(storedFilter);
   }, []);
 
   function handleRetake(index: number) {
-    router.push(`/booth?retake=${index}&ratio=${ratio}&filter=${filter}`);
+    router.push(`/booth?retake=${index}&layout=${layoutId}&filter=${filter}`);
   }
 
   function handleStartOver() {
     sessionStorage.removeItem("pickaboo-captures");
-    sessionStorage.removeItem("pickaboo-ratio");
+    sessionStorage.removeItem("pickaboo-layout");
     sessionStorage.removeItem("pickaboo-filter");
     router.push("/");
   }

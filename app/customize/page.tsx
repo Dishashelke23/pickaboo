@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import html2canvas from "html2canvas-pro";
+import { LAYOUTS, LayoutOption, getLayout } from "../layouts";
 
-type RatioId = "strip" | "portrait" | "story" | "post";
 type Slot = { xPct: number; yPct: number; wPct: number; hPct: number };
 
 type StickerEl = { id: string; kind: "sticker"; emoji: string; xPct: number; yPct: number; size: number };
@@ -25,13 +25,6 @@ type BgChoice = {
   backgroundImage?: string;
   backgroundSize?: string;
   dark: boolean;
-};
-
-const RATIO_CONFIG: Record<RatioId, { label: string; aspect: string; aspectValue: number; hasFooter: boolean }> = {
-  strip: { label: "Classic Strip", aspect: "2 / 6", aspectValue: 2 / 6, hasFooter: true },
-  portrait: { label: "Portrait", aspect: "4 / 5", aspectValue: 4 / 5, hasFooter: false },
-  story: { label: "IG Story", aspect: "9 / 16", aspectValue: 9 / 16, hasFooter: false },
-  post: { label: "IG Post", aspect: "1 / 1", aspectValue: 1, hasFooter: false },
 };
 
 const SOLIDS = [
@@ -122,12 +115,14 @@ function twemojiUrl(emoji: string): string {
   return `${TWEMOJI_BASE}${toTwemojiCodepoint(emoji)}.png`;
 }
 
-function buildLayout(ratio: RatioId, count: number): Slot[] {
+function buildLayoutSlots(layout: LayoutOption, count: number): Slot[] {
   const gap = 3;
   const padding = 5;
-  const footerSpace = RATIO_CONFIG[ratio].hasFooter ? 8 : 0;
+  const footerSpace = layout.hasFooter ? 8 : 0;
+  const cols = layout.cols;
+  const rows = layout.rows;
 
-  if (ratio === "strip") {
+  if (cols === 1) {
     const usableH = 100 - padding * 2 - footerSpace - gap * (count - 1);
     const cellH = usableH / count;
     return Array.from({ length: count }, (_, i) => ({
@@ -138,10 +133,8 @@ function buildLayout(ratio: RatioId, count: number): Slot[] {
     }));
   }
 
-  const cols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
-  const rows = Math.ceil(count / cols);
   const usableW = 100 - padding * 2 - gap * (cols - 1);
-  const usableH = 100 - padding * 2 - gap * (rows - 1);
+  const usableH = 100 - padding * 2 - footerSpace - gap * (rows - 1);
   const cellW = usableW / cols;
   const cellH = usableH / rows;
 
@@ -178,9 +171,10 @@ function isIOSDevice(): boolean {
 export default function CustomizePage() {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const appliedThemeRef = useRef(false);
 
   const [captures, setCaptures] = useState<string[]>([]);
-  const [ratio, setRatio] = useState<RatioId>("strip");
+  const [layout, setLayout] = useState<LayoutOption>(LAYOUTS[0]);
 
   const [bgTab, setBgTab] = useState<BgTab>("solid");
   const [background, setBackground] = useState<BgChoice>({
@@ -206,22 +200,46 @@ export default function CustomizePage() {
 
   useEffect(() => {
     const stored = sessionStorage.getItem("pickaboo-captures");
-    const storedRatio = sessionStorage.getItem("pickaboo-ratio") as RatioId | null;
+    const storedLayoutId = sessionStorage.getItem("pickaboo-layout");
     if (!stored) {
       router.replace("/");
       return;
     }
     setCaptures(JSON.parse(stored));
-    if (storedRatio && RATIO_CONFIG[storedRatio]) setRatio(storedRatio);
+    setLayout(getLayout(storedLayoutId));
   }, [router]);
 
-  const slots = useMemo(() => buildLayout(ratio, captures.length), [ratio, captures.length]);
+  // Auto-place theme stickers (e.g. hearts) once, the first time captures load
+  useEffect(() => {
+    if (appliedThemeRef.current) return;
+    if (captures.length === 0) return;
+    if (layout.themeOverlay !== "hearts") return;
+    appliedThemeRef.current = true;
+
+    const heartPositions = [
+      { xPct: 14, yPct: 10 },
+      { xPct: 86, yPct: 18 },
+      { xPct: 12, yPct: 55 },
+      { xPct: 88, yPct: 60 },
+      { xPct: 50, yPct: 93 },
+    ];
+    const themedStickers: StickerEl[] = heartPositions.map((pos, i) => ({
+      id: `theme-heart-${i}`,
+      kind: "sticker",
+      emoji: "💖",
+      xPct: pos.xPct,
+      yPct: pos.yPct,
+      size: 30,
+    }));
+    setElements((prev) => [...prev, ...themedStickers]);
+  }, [captures, layout]);
+
+  const slots = useMemo(() => buildLayoutSlots(layout, captures.length), [layout, captures.length]);
   const selectedEl = elements.find((el) => el.id === selectedId) ?? null;
 
-  const aspectValue = RATIO_CONFIG[ratio].aspectValue;
   const canvasHeight = isDesktop
-    ? `min(66vh, calc((100vw - 460px) / ${aspectValue}))`
-    : `min(46vh, calc((100vw - 48px) / ${aspectValue}))`;
+    ? `min(66vh, calc((100vw - 460px) / ${layout.aspectValue}))`
+    : `min(46vh, calc((100vw - 48px) / ${layout.aspectValue}))`;
 
   function addSticker(emoji: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -353,7 +371,7 @@ export default function CustomizePage() {
           className="relative flex-shrink-0 touch-none overflow-hidden rounded-2xl shadow-2xl ring-1 ring-ink/10"
           style={{
             height: canvasHeight,
-            aspectRatio: RATIO_CONFIG[ratio].aspect,
+            aspectRatio: layout.aspect,
             backgroundColor: background.backgroundColor ?? "transparent",
             backgroundImage: background.backgroundImage ?? "none",
             backgroundSize: background.backgroundSize ?? "auto",
@@ -376,7 +394,7 @@ export default function CustomizePage() {
             />
           ))}
 
-          {RATIO_CONFIG[ratio].hasFooter && (
+          {layout.hasFooter && (
             <p
               className={`absolute bottom-2 left-0 right-0 text-center font-[family-name:var(--font-mono)] text-[10px] tracking-widest ${
                 background.dark ? "text-paper/50" : "text-ink/40"

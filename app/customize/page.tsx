@@ -20,12 +20,18 @@ type TextEl = {
 };
 type CanvasEl = StickerEl | TextEl;
 type BgTab = "solid" | "gradient" | "pattern";
+type BgChoice = {
+  backgroundColor?: string;
+  backgroundImage?: string;
+  backgroundSize?: string;
+  dark: boolean;
+};
 
-const RATIO_CONFIG: Record<RatioId, { label: string; aspect: string; hasFooter: boolean }> = {
-  strip: { label: "Classic Strip", aspect: "2 / 6", hasFooter: true },
-  portrait: { label: "Portrait", aspect: "4 / 5", hasFooter: false },
-  story: { label: "IG Story", aspect: "9 / 16", hasFooter: false },
-  post: { label: "IG Post", aspect: "1 / 1", hasFooter: false },
+const RATIO_CONFIG: Record<RatioId, { label: string; aspect: string; aspectValue: number; hasFooter: boolean }> = {
+  strip: { label: "Classic Strip", aspect: "2 / 6", aspectValue: 2 / 6, hasFooter: true },
+  portrait: { label: "Portrait", aspect: "4 / 5", aspectValue: 4 / 5, hasFooter: false },
+  story: { label: "IG Story", aspect: "9 / 16", aspectValue: 9 / 16, hasFooter: false },
+  post: { label: "IG Post", aspect: "1 / 1", aspectValue: 1, hasFooter: false },
 };
 
 const SOLIDS = [
@@ -39,19 +45,59 @@ const SOLIDS = [
 ];
 
 const GRADIENTS = [
-  { id: "sunset", label: "Sunset", css: "linear-gradient(135deg, #F2789F, #F4B740)", dark: false },
-  { id: "dusk", label: "Dusk", css: "linear-gradient(135deg, #221019, #B3222B)", dark: true },
-  { id: "ocean", label: "Ocean", css: "linear-gradient(135deg, #6FBFA0, #221019)", dark: true },
-  { id: "candy", label: "Candy", css: "linear-gradient(135deg, #F2789F, #F4B740, #6FBFA0)", dark: false },
-  { id: "peach", label: "Peach", css: "linear-gradient(160deg, #FBF6EC, #F2789F)", dark: false },
-  { id: "midnight", label: "Midnight", css: "linear-gradient(160deg, #221019, #7C171F)", dark: true },
+  { id: "sunset", label: "Sunset", backgroundImage: "linear-gradient(135deg, #F2789F, #F4B740)", dark: false },
+  { id: "dusk", label: "Dusk", backgroundImage: "linear-gradient(135deg, #221019, #B3222B)", dark: true },
+  { id: "ocean", label: "Ocean", backgroundImage: "linear-gradient(135deg, #6FBFA0, #221019)", dark: true },
+  { id: "candy", label: "Candy", backgroundImage: "linear-gradient(135deg, #F2789F, #F4B740, #6FBFA0)", dark: false },
+  { id: "peach", label: "Peach", backgroundImage: "linear-gradient(160deg, #FBF6EC, #F2789F)", dark: false },
+  { id: "midnight", label: "Midnight", backgroundImage: "linear-gradient(160deg, #221019, #7C171F)", dark: true },
 ];
 
+function svgToDataUri(svg: string): string {
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
 const PATTERNS = [
-  { id: "dots", label: "Dots", css: "radial-gradient(#22101933 1.5px, transparent 1.5px)", size: "16px 16px", base: "#FBF6EC", dark: false },
-  { id: "dots-dark", label: "Dots Dark", css: "radial-gradient(#FBF6EC33 1.5px, transparent 1.5px)", size: "16px 16px", base: "#221019", dark: true },
-  { id: "stripes", label: "Stripes", css: "repeating-linear-gradient(45deg, #B3222B22 0 8px, transparent 8px 16px)", size: "auto", base: "#FBF6EC", dark: false },
-  { id: "grid", label: "Grid", css: "linear-gradient(#22101922 1px, transparent 1px), linear-gradient(90deg, #22101922 1px, transparent 1px)", size: "14px 14px", base: "#FFFFFF", dark: false },
+  {
+    id: "dots",
+    label: "Dots",
+    dark: false,
+    backgroundColor: "#FBF6EC",
+    backgroundImage: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="2" cy="2" r="1.5" fill="#22101933"/></svg>`
+    ),
+    backgroundSize: "16px 16px",
+  },
+  {
+    id: "dots-dark",
+    label: "Dots Dark",
+    dark: true,
+    backgroundColor: "#221019",
+    backgroundImage: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="2" cy="2" r="1.5" fill="#FBF6EC33"/></svg>`
+    ),
+    backgroundSize: "16px 16px",
+  },
+  {
+    id: "stripes",
+    label: "Stripes",
+    dark: false,
+    backgroundColor: "#FBF6EC",
+    backgroundImage: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path d="M0 16L16 0" stroke="#B3222B33" stroke-width="3"/><path d="M-4 4L4 -4" stroke="#B3222B33" stroke-width="3"/><path d="M12 20L20 12" stroke="#B3222B33" stroke-width="3"/></svg>`
+    ),
+    backgroundSize: "16px 16px",
+  },
+  {
+    id: "grid",
+    label: "Grid",
+    dark: false,
+    backgroundColor: "#FFFFFF",
+    backgroundImage: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"><path d="M14 0H0V14" fill="none" stroke="#22101922" stroke-width="1"/></svg>`
+    ),
+    backgroundSize: "14px 14px",
+  },
 ];
 
 const STICKER_OPTIONS = ["✨", "💖", "🎀", "🫧", "🚀", "🌈", "🦋", "⭐", "🍒", "🌸", "🔥", "👑"];
@@ -137,8 +183,8 @@ export default function CustomizePage() {
   const [ratio, setRatio] = useState<RatioId>("strip");
 
   const [bgTab, setBgTab] = useState<BgTab>("solid");
-  const [background, setBackground] = useState<{ css: string; size?: string; dark: boolean }>({
-    css: SOLIDS[0].css,
+  const [background, setBackground] = useState<BgChoice>({
+    backgroundColor: SOLIDS[0].css,
     dark: SOLIDS[0].dark,
   });
 
@@ -148,6 +194,15 @@ export default function CustomizePage() {
   const [activeAction, setActiveAction] = useState<{ id: string; type: "drag" | "resize" } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("pickaboo-captures");
@@ -162,6 +217,11 @@ export default function CustomizePage() {
 
   const slots = useMemo(() => buildLayout(ratio, captures.length), [ratio, captures.length]);
   const selectedEl = elements.find((el) => el.id === selectedId) ?? null;
+
+  const aspectValue = RATIO_CONFIG[ratio].aspectValue;
+  const canvasHeight = isDesktop
+    ? `min(66vh, calc((100vw - 460px) / ${aspectValue}))`
+    : `min(46vh, calc((100vw - 48px) / ${aspectValue}))`;
 
   function addSticker(emoji: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -284,18 +344,20 @@ export default function CustomizePage() {
       </div>
 
       <div className="flex w-full flex-col items-center gap-6 md:flex-row md:items-start md:justify-center md:gap-10">
-        {/* Canvas preview — width-driven, safe on any screen size */}
         <div
           ref={canvasRef}
           onPointerDown={handleCanvasPointerDown}
           onPointerMove={handleCanvasPointerMove}
           onPointerUp={handleCanvasPointerUp}
           onPointerLeave={handleCanvasPointerUp}
-          className="relative w-[68vw] max-w-[300px] flex-shrink-0 touch-none overflow-hidden rounded-2xl shadow-2xl ring-1 ring-ink/10 sm:w-[42vw] sm:max-w-[340px] md:w-[380px]"
+          className="relative flex-shrink-0 touch-none overflow-hidden rounded-2xl shadow-2xl ring-1 ring-ink/10"
           style={{
-            background: background.css,
-            backgroundSize: background.size,
+            height: canvasHeight,
             aspectRatio: RATIO_CONFIG[ratio].aspect,
+            backgroundColor: background.backgroundColor ?? "transparent",
+            backgroundImage: background.backgroundImage ?? "none",
+            backgroundSize: background.backgroundSize ?? "auto",
+            backgroundRepeat: background.backgroundImage ? "repeat" : "no-repeat",
           }}
         >
           {slots.map((slot, i) => (
@@ -414,7 +476,6 @@ export default function CustomizePage() {
           })}
         </div>
 
-        {/* Tools panel */}
         <div className="flex w-full max-w-xs flex-shrink-0 flex-col items-center gap-5 pb-8 md:items-start">
           <div className="w-full">
             <div className="mb-2 flex gap-3">
@@ -436,9 +497,11 @@ export default function CustomizePage() {
                 {SOLIDS.map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => setBackground({ css: s.css, dark: s.dark })}
+                    onClick={() => setBackground({ backgroundColor: s.css, dark: s.dark })}
                     className={`h-8 w-8 rounded-full transition-transform hover:scale-110 sm:h-10 sm:w-10 ${
-                      background.css === s.css ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper" : "ring-1 ring-ink/10"
+                      background.backgroundColor === s.css && !background.backgroundImage
+                        ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper"
+                        : "ring-1 ring-ink/10"
                     }`}
                     style={{ backgroundColor: s.css }}
                     aria-label={s.label}
@@ -450,7 +513,9 @@ export default function CustomizePage() {
                 >
                   <input
                     type="color"
-                    onChange={(e) => setBackground({ css: e.target.value, dark: getIsDark(e.target.value) })}
+                    onChange={(e) =>
+                      setBackground({ backgroundColor: e.target.value, dark: getIsDark(e.target.value) })
+                    }
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     aria-label="Pick a custom background color"
                   />
@@ -463,11 +528,13 @@ export default function CustomizePage() {
                 {GRADIENTS.map((g) => (
                   <button
                     key={g.id}
-                    onClick={() => setBackground({ css: g.css, dark: g.dark })}
+                    onClick={() => setBackground({ backgroundImage: g.backgroundImage, dark: g.dark })}
                     className={`h-8 w-8 rounded-full transition-transform hover:scale-110 sm:h-10 sm:w-10 ${
-                      background.css === g.css ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper" : "ring-1 ring-ink/10"
+                      background.backgroundImage === g.backgroundImage
+                        ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper"
+                        : "ring-1 ring-ink/10"
                     }`}
-                    style={{ background: g.css }}
+                    style={{ backgroundImage: g.backgroundImage }}
                     aria-label={g.label}
                   />
                 ))}
@@ -479,11 +546,24 @@ export default function CustomizePage() {
                 {PATTERNS.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => setBackground({ css: `${p.css}, ${p.base}`, size: p.size, dark: p.dark })}
+                    onClick={() =>
+                      setBackground({
+                        backgroundColor: p.backgroundColor,
+                        backgroundImage: p.backgroundImage,
+                        backgroundSize: p.backgroundSize,
+                        dark: p.dark,
+                      })
+                    }
                     className={`h-8 w-8 rounded-full transition-transform hover:scale-110 sm:h-10 sm:w-10 ${
-                      background.css === `${p.css}, ${p.base}` ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper" : "ring-1 ring-ink/10"
+                      background.backgroundImage === p.backgroundImage
+                        ? "ring-4 ring-curtain ring-offset-2 ring-offset-paper"
+                        : "ring-1 ring-ink/10"
                     }`}
-                    style={{ background: `${p.css}, ${p.base}`, backgroundSize: p.size }}
+                    style={{
+                      backgroundColor: p.backgroundColor,
+                      backgroundImage: p.backgroundImage,
+                      backgroundSize: p.backgroundSize,
+                    }}
                     aria-label={p.label}
                   />
                 ))}

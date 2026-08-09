@@ -1,10 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Ratio = { id: string; label: string; hint: string };
-type FilterPack = { id: string; label: string };
 
 const RATIOS: Ratio[] = [
   { id: "strip", label: "Classic Strip", hint: "2×6" },
@@ -14,13 +13,6 @@ const RATIOS: Ratio[] = [
 ];
 
 const SHOT_COUNTS: number[] = [3, 4, 6];
-
-const FILTER_PACKS: FilterPack[] = [
-  { id: "classic", label: "Classic B&W" },
-  { id: "pastel", label: "Dreamy Pastel" },
-  { id: "vivid", label: "Vivid Pop" },
-  { id: "retro", label: "Retro Film" },
-];
 
 function PrintedStrip() {
   const frames = ["bg-bubblegum/30", "bg-flashbulb/30", "bg-mint/30", "bg-curtain/20"];
@@ -72,10 +64,9 @@ function OptionCard({
 }
 
 export default function Home() {
-  const [ratio, setRatio] = useState<string>("strip");
-  const [shots, setShots] = useState<number>(4);
-  const [filterPack, setFilterPack] = useState<string>("classic");
   const router = useRouter();
+  const [ratio, setRatio] = useState<string>("strip");
+  const [shots, setShots] = useState<number>(3);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12 md:py-20">
@@ -99,7 +90,7 @@ export default function Home() {
       </div>
 
       <div className="mt-16 rounded-3xl bg-white/60 p-6 ring-1 ring-ink/10 md:p-10">
-        <div className="grid gap-8 md:grid-cols-3">
+        <div className="grid gap-8 md:grid-cols-2">
           <div>
             <p className="font-[family-name:var(--font-mono)] text-xs tracking-widest text-curtain">
               01
@@ -136,34 +127,12 @@ export default function Home() {
               ))}
             </div>
           </div>
-
-          <div>
-            <p className="font-[family-name:var(--font-mono)] text-xs tracking-widest text-curtain">
-              03
-            </p>
-            <h2 className="mt-1 font-[family-name:var(--font-display)] text-xl text-ink">
-              Choose a filter pack
-            </h2>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {FILTER_PACKS.map((f) => (
-                <OptionCard
-                  key={f.id}
-                  selected={filterPack === f.id}
-                  onClick={() => setFilterPack(f.id)}
-                >
-                  <span className="block text-sm font-medium">{f.label}</span>
-                </OptionCard>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="mt-10 flex justify-center">
           <button
             className="rounded-full bg-flashbulb px-10 py-4 font-[family-name:var(--font-display)] text-lg text-ink shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-curtain focus-visible:ring-offset-2"
-            onClick={() =>
-  router.push(`/booth?ratio=${ratio}&shots=${shots}&filter=${filterPack}`)
-}
+            onClick={() => router.push(`/booth?ratio=${ratio}&shots=${shots}`)}
           >
             Start Snapping
           </button>

@@ -237,45 +237,46 @@ export default function CustomizePage() {
   }
 
   async function handleDownloadGif() {
-    if (isExportingGif || captures.length === 0) return;
-    setIsExportingGif(true);
-    try {
-      const GIFModule: any = await import("gif.js");
-      const GIFCtor = GIFModule.default ?? GIFModule;
-      const gif = new GIFCtor({
-        workers: 2,
-        quality: 10,
-        workerScript: "https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js",
-      });
+  if (isExportingGif || captures.length === 0) return;
+  setIsExportingGif(true);
+  try {
+    const GIFModule: any = await import("gif.js");
+    const GIFCtor = GIFModule.default ?? GIFModule;
 
-      for (const src of captures) {
-        const img = await loadImageEl(src);
-        gif.addFrame(img, { delay: 600 });
-      }
+    const gif = new GIFCtor({
+      workers: 2,
+      quality: 10,
+      workerScript: "/gif.worker.js",
+    });
 
-      const blob: Blob = await new Promise((resolve) => {
-        gif.on("finished", (b: Blob) => resolve(b));
-        gif.render();
-      });
-
-      const url = URL.createObjectURL(blob);
-      if (isIOSDevice()) {
-        setGifPreviewUrl(url);
-      } else {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "pickaboo-strip.gif";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-      }
-    } catch (err) {
-      console.error("GIF export failed:", err);
-    } finally {
-      setIsExportingGif(false);
+    for (const src of captures) {
+      const img = await loadImageEl(src);
+      gif.addFrame(img, { delay: 600 });
     }
+
+    const blob: Blob = await new Promise((resolve) => {
+      gif.on("finished", (b: Blob) => resolve(b));
+      gif.render();
+    });
+
+    const url = URL.createObjectURL(blob);
+    if (isIOSDevice()) {
+      setGifPreviewUrl(url);
+    } else {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "pickaboo-strip.gif";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+  } catch (err) {
+    console.error("GIF export failed:", err);
+  } finally {
+    setIsExportingGif(false);
   }
+}
 
   if (captures.length === 0) return null;
 

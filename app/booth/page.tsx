@@ -29,14 +29,82 @@ const FILTERS: FilterOption[] = [
 ];
 
 const TIMER_OPTIONS = [3, 5, 10];
-const TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/";
-const FACE_MODELS_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
+const FACE_MODELS_URL = "/models";
 
-function toTwemojiCodepoint(emoji: string): string {
-  return Array.from(emoji).map((c) => c.codePointAt(0)!.toString(16)).filter((h) => h !== "fe0f").join("-");
+// Photo Booth-style crown geometry.
+// Coordinates are relative to the detected head width/height.
+// The crown is intentionally wide, tightly clustered and slightly overlapping.
+const CROWN_OFFSETS = [
+  // Deliberately irregular: the reference is NOT a neat side-by-side arch.
+  // Each heart has its own depth, opacity and vertical motion.
+  { dx: -0.49, dy: 0.060, scale: 0.70, rotate: -13, opacity: 0.58, amp: 0.030, phase: 0.15, speed: 1.00 },
+  { dx: -0.38, dy: -0.055, scale: 0.82, rotate: -8, opacity: 0.82, amp: 0.045, phase: 2.30, speed: 0.86 },
+  { dx: -0.25, dy: -0.125, scale: 0.93, rotate: -5, opacity: 0.92, amp: 0.038, phase: 4.10, speed: 1.08 },
+  { dx: -0.105, dy: -0.165, scale: 1.00, rotate: -2, opacity: 1.00, amp: 0.052, phase: 1.05, speed: 0.92 },
+  { dx: 0.030, dy: -0.135, scale: 1.04, rotate: 2, opacity: 0.96, amp: 0.040, phase: 3.20, speed: 1.15 },
+  { dx: 0.160, dy: -0.175, scale: 0.98, rotate: 5, opacity: 0.76, amp: 0.050, phase: 5.10, speed: 0.82 },
+  { dx: 0.285, dy: -0.090, scale: 0.88, rotate: 8, opacity: 0.90, amp: 0.034, phase: 0.90, speed: 1.03 },
+  { dx: 0.405, dy: 0.000, scale: 0.76, rotate: 12, opacity: 0.66, amp: 0.048, phase: 3.85, speed: 0.88 },
+  { dx: 0.515, dy: 0.075, scale: 0.62, rotate: 17, opacity: 0.52, amp: 0.028, phase: 5.65, speed: 1.10 },
+];
+
+const HEART_EMOJI = "💗";
+const HEART_FONT_FAMILY = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+const HEART_ASSET_SRC = "/ios-pink-heart.png";
+
+type CrownTarget = {
+  cx: number;
+  anchorY: number;
+  headWidth: number;
+  headHeight: number;
+  roll: number;
+};
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
 }
-function twemojiUrl(emoji: string): string {
-  return `${TWEMOJI_BASE}${toTwemojiCodepoint(emoji)}.png`;
+
+function getCrownTarget(result: any): CrownTarget | null {
+  if (!result?.box) return null;
+
+  const box = result.box;
+  const landmarks = result.landmarks;
+  let cx = box.x + box.width / 2;
+  let browY = box.y + box.height * 0.30;
+
+  // 68-point landmarks give us a much better "hairline" proxy than the
+  // top edge of the face detector box. Eyebrows are points 17..26.
+  if (landmarks?.positions?.length >= 27) {
+    const brows = landmarks.positions.slice(17, 27);
+    if (brows.length) {
+      cx = brows.reduce((sum: number, p: any) => sum + p.x, 0) / brows.length;
+      browY = Math.min(...brows.map((p: any) => p.y));
+    }
+  }
+
+  // Move above the eyebrows into the hair/crown area.
+  const anchorY = browY - box.height * 0.48;
+
+  let roll = 0;
+  if (landmarks?.positions?.length >= 48) {
+    const leftEye = landmarks.positions.slice(36, 42);
+    const rightEye = landmarks.positions.slice(42, 48);
+    if (leftEye.length && rightEye.length) {
+      const lx = leftEye.reduce((s: number, p: any) => s + p.x, 0) / leftEye.length;
+      const ly = leftEye.reduce((s: number, p: any) => s + p.y, 0) / leftEye.length;
+      const rx = rightEye.reduce((s: number, p: any) => s + p.x, 0) / rightEye.length;
+      const ry = rightEye.reduce((s: number, p: any) => s + p.y, 0) / rightEye.length;
+      roll = Math.atan2(ry - ly, rx - lx);
+    }
+  }
+
+  return {
+    cx,
+    anchorY,
+    headWidth: box.width,
+    headHeight: box.height,
+    roll,
+  };
 }
 
 function wait(ms: number) {
@@ -113,10 +181,16 @@ function BoothContent() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const heartImgRef = useRef<HTMLImageElement | null>(null);
+  const useNativeAppleEmojiRef = useRef(false);
+  const crownTargetRef = useRef<CrownTarget | null>(null);
+  const crownCurrentRef = useRef<CrownTarget | null>(null);
+  const crownVisibleRef = useRef(false);
+  const crownMissesRef = useRef(0);
+  const overlayRafRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const heartImgRef = useRef<HTMLImageElement | null>(null);
-  const faceBoxRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   const faceapiRef = useRef<any>(null);
 
   const [status, setStatus] = useState<CameraStatus>("idle");
@@ -134,7 +208,6 @@ function BoothContent() {
   const [captured, setCaptured] = useState<string[]>([]);
 
   const [faceStatus, setFaceStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [facePos, setFacePos] = useState<{ xPct: number; yPct: number; widthPct: number } | null>(null);
 
   const totalShots = retakeIndex !== null ? 1 : layout.poses;
 
@@ -175,9 +248,19 @@ function BoothContent() {
 
   useEffect(() => {
     if (layout.themeOverlay !== "hearts") return;
+
+    // Use Apple's actual system emoji artwork when the app is running on an
+    // Apple device. On Windows/Linux we use the bundled reference-derived
+    // transparent heart so the site does not fall back to a random emoji set.
+    const ua = navigator.userAgent || "";
+    const platform = navigator.platform || "";
+    useNativeAppleEmojiRef.current =
+      /Macintosh|Mac OS X|iPhone|iPad|iPod/.test(ua) ||
+      /Mac/.test(platform);
+
     const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = twemojiUrl("💗");
+    img.decoding = "async";
+    img.src = HEART_ASSET_SRC;
     heartImgRef.current = img;
   }, [layout.themeOverlay]);
 
@@ -185,48 +268,274 @@ function BoothContent() {
     if (layout.themeOverlay !== "hearts") return;
     let cancelled = false;
     setFaceStatus("loading");
+
     (async () => {
       try {
         if (!faceapiRef.current) faceapiRef.current = await import("face-api.js");
-        await faceapiRef.current.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_URL);
+        const faceapi = faceapiRef.current;
+
+        // Keep the existing tiny detector, but add the 68-point landmark
+        // model. Landmarks let us anchor the crown above the eyebrows instead
+        // of incorrectly pinning it to the forehead/top of the box.
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODELS_URL),
+        ]);
+
         if (!cancelled) setFaceStatus("ready");
       } catch (err) {
         console.error("Face model load failed:", err);
         if (!cancelled) setFaceStatus("error");
       }
     })();
+
     return () => { cancelled = true; };
   }, [layout.themeOverlay]);
 
   useEffect(() => {
-    if (faceStatus !== "ready" || status !== "ready" || layout.themeOverlay !== "hearts") return;
-    let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout>;
+  if (
+    faceStatus !== "ready" ||
+    status !== "ready" ||
+    layout.themeOverlay !== "hearts"
+  ) {
+    return;
+  }
 
-    async function detectLoop() {
-      if (cancelled || !videoRef.current || !faceapiRef.current) return;
+  let cancelled = false;
+  let detectionTimer: ReturnType<typeof setTimeout> | null = null;
+  let detecting = false;
+
+  async function detectLoop() {
+    if (
+      cancelled ||
+      !videoRef.current ||
+      !faceapiRef.current ||
+      videoRef.current.readyState < 2
+    ) {
+      if (!cancelled) {
+        detectionTimer = setTimeout(detectLoop, 100);
+      }
+      return;
+    }
+
+    if (!detecting) {
+      detecting = true;
+
       try {
         const faceapi = faceapiRef.current;
-        const result = await faceapi.detectSingleFace(
+
+        // FIRST: reliable face-box detection.
+        // This alone is enough to show the crown.
+        const detection = await faceapi.detectSingleFace(
           videoRef.current,
-          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+          new faceapi.TinyFaceDetectorOptions({
+            inputSize: 224,
+            scoreThreshold: 0.35,
+          })
         );
-        if (!cancelled && result && videoRef.current) {
-          const vw = videoRef.current.videoWidth;
-          const vh = videoRef.current.videoHeight;
-          faceBoxRef.current = { x: result.box.x, y: result.box.y, width: result.box.width, height: result.box.height };
-          setFacePos({
-            xPct: ((result.box.x + result.box.width / 2) / vw) * 100,
-            yPct: (result.box.y / vh) * 100,
-            widthPct: (result.box.width / vw) * 100,
-          });
+
+        if (cancelled) return;
+
+        if (detection) {
+          // Guaranteed fallback target.
+          let target: CrownTarget = {
+            cx: detection.box.x + detection.box.width / 2,
+            anchorY:
+              detection.box.y -
+              detection.box.height * 0.08,
+            headWidth: detection.box.width,
+            headHeight: detection.box.height,
+            roll: 0,
+          };
+
+          // Try landmarks separately.
+          // If landmarks fail for ANY reason, we keep the
+          // reliable face-box target above.
+          try {
+            const landmarkResult = await detection.withFaceLandmarks();
+
+            if (!cancelled && landmarkResult) {
+              const landmarkTarget = getCrownTarget(landmarkResult);
+
+              if (landmarkTarget) {
+                target = landmarkTarget;
+              }
+            }
+          } catch {
+            // Ignore landmark failures.
+            // Face-box tracking continues.
+          }
+
+          crownTargetRef.current = target;
+          crownVisibleRef.current = true;
+          crownMissesRef.current = 0;
+        } else {
+          crownMissesRef.current += 1;
+
+          // Keep the crown alive through temporary detector misses.
+          if (crownMissesRef.current > 10) {
+            crownVisibleRef.current = false;
+          }
         }
-      } catch {}
-      if (!cancelled) timeoutId = setTimeout(detectLoop, 150);
+      } catch (error) {
+        console.warn("Heart tracking frame failed:", error);
+      } finally {
+        detecting = false;
+      }
     }
-    detectLoop();
-    return () => { cancelled = true; clearTimeout(timeoutId); };
-  }, [faceStatus, status, layout.themeOverlay]);
+
+    if (!cancelled) {
+      detectionTimer = setTimeout(detectLoop, 70);
+    }
+  }
+
+  detectLoop();
+
+  return () => {
+    cancelled = true;
+
+    if (detectionTimer) {
+      clearTimeout(detectionTimer);
+    }
+  };
+}, [faceStatus, status, layout.themeOverlay]);
+
+  // 60 FPS compositor for the crown. React state is deliberately not used
+  // here: state updates would cause needless re-renders and visible jitter.
+  useEffect(() => {
+    if (layout.themeOverlay !== "hearts") return;
+
+    let cancelled = false;
+
+    function resizeOverlay() {
+      const canvas = overlayCanvasRef.current;
+      const video = videoRef.current;
+      if (!canvas || !video) return;
+
+      const rect = video.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(rect.width * dpr));
+      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+    }
+
+    function drawCrown() {
+      if (cancelled) return;
+
+      const canvas = overlayCanvasRef.current;
+      const video = videoRef.current;
+      const heart = heartImgRef.current;
+
+      if (
+        canvas &&
+        video &&
+        video.videoWidth &&
+        video.videoHeight &&
+        (useNativeAppleEmojiRef.current ||
+          (heart && heart.complete && heart.naturalWidth > 0))
+      ) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const rect = video.getBoundingClientRect();
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+          if (
+            canvas.width !== Math.round(rect.width * dpr) ||
+            canvas.height !== Math.round(rect.height * dpr)
+          ) {
+            resizeOverlay();
+          }
+
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, rect.width, rect.height);
+
+          const target = crownTargetRef.current;
+          if (target && crownVisibleRef.current) {
+            if (!crownCurrentRef.current) {
+              crownCurrentRef.current = { ...target };
+            } else {
+              // Exponential smoothing: fast enough to follow movement but
+              // slow enough to eliminate detector jitter.
+              const s = 0.30;
+              crownCurrentRef.current.cx = lerp(crownCurrentRef.current.cx, target.cx, s);
+              crownCurrentRef.current.anchorY = lerp(crownCurrentRef.current.anchorY, target.anchorY, s);
+              crownCurrentRef.current.headWidth = lerp(crownCurrentRef.current.headWidth, target.headWidth, s);
+              crownCurrentRef.current.headHeight = lerp(crownCurrentRef.current.headHeight, target.headHeight, s);
+              crownCurrentRef.current.roll = lerp(crownCurrentRef.current.roll, target.roll, s);
+            }
+
+            const c = crownCurrentRef.current;
+
+            // Convert intrinsic camera coordinates to the visible CSS
+            // rectangle using the exact same object-cover crop as <video>.
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            const scale = Math.max(rect.width / vw, rect.height / vh);
+            const renderedW = vw * scale;
+            const renderedH = vh * scale;
+            const cropX = (renderedW - rect.width) / 2;
+            const cropY = (renderedH - rect.height) / 2;
+
+            const centerX = c.cx * scale - cropX;
+            const anchorY = c.anchorY * scale - cropY;
+            const headW = c.headWidth * scale;
+
+            // The reference has individual hearts drifting independently.
+            // They do NOT move as one group: some rise while others fall.
+            const heartW = Math.max(24, Math.min(94, headW * 0.235));
+            const now = performance.now() / 1000;
+
+            ctx.globalCompositeOperation = "source-over";
+            ctx.imageSmoothingEnabled = true;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            for (const item of CROWN_OFFSETS) {
+              const independentY =
+                Math.sin(now * item.speed + item.phase) *
+                item.amp *
+                headW;
+
+              const x = centerX + item.dx * headW;
+              const y = anchorY + item.dy * headW + independentY;
+              const w = heartW * item.scale;
+
+              ctx.save();
+              ctx.translate(x, y);
+              ctx.rotate(c.roll + (item.rotate * Math.PI) / 180);
+              ctx.globalAlpha = item.opacity;
+
+              if (useNativeAppleEmojiRef.current) {
+                ctx.font = `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
+                ctx.fillText(HEART_EMOJI, 0, 0);
+              } else if (heart) {
+                const h = w * 1.02;
+                ctx.drawImage(heart, -w / 2, -h / 2, w, h);
+              }
+
+              ctx.restore();
+            }
+
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+
+      overlayRafRef.current = requestAnimationFrame(drawCrown);
+    }
+
+    resizeOverlay();
+    window.addEventListener("resize", resizeOverlay);
+    overlayRafRef.current = requestAnimationFrame(drawCrown);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", resizeOverlay);
+      if (overlayRafRef.current !== null) cancelAnimationFrame(overlayRafRef.current);
+      overlayRafRef.current = null;
+    };
+  }, [layout.themeOverlay, status]);
 
   function capturePhoto(): string | null {
     const video = videoRef.current;
@@ -238,7 +547,7 @@ function BoothContent() {
     canvas.width = width;
     canvas.height = height;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return null;
 
     ctx.save();
@@ -252,13 +561,59 @@ function BoothContent() {
       ctx.putImageData(imageData, 0, 0);
     }
 
-    if (layout.themeOverlay === "hearts" && faceBoxRef.current && heartImgRef.current?.complete) {
-      const box = faceBoxRef.current;
-      const mirroredX = facingMode === "user" ? width - box.x - box.width : box.x;
-      const centerX = mirroredX + box.width / 2;
-      const centerY = box.y - box.height * 0.35;
-      const heartSize = box.width * 0.9;
-      ctx.drawImage(heartImgRef.current, centerX - heartSize / 2, centerY - heartSize / 2, heartSize, heartSize);
+    if (
+      layout.themeOverlay === "hearts" &&
+      crownCurrentRef.current &&
+      (useNativeAppleEmojiRef.current ||
+        (heartImgRef.current?.complete && heartImgRef.current?.naturalWidth))
+    ) {
+      const c = crownCurrentRef.current;
+
+      const mirrorX = (x: number) =>
+        facingMode === "user" ? width - x : x;
+
+      const centerX = mirrorX(c.cx);
+      const headW = c.headWidth;
+      const heartW = Math.max(30, Math.min(150, headW * 0.235));
+      const now = performance.now() / 1000;
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.imageSmoothingEnabled = true;
+
+      for (const item of CROWN_OFFSETS) {
+        const independentY =
+          Math.sin(now * item.speed + item.phase) *
+          item.amp *
+          headW;
+
+        const rawX = c.cx + item.dx * headW;
+        const x = mirrorX(rawX);
+        const y = c.anchorY + item.dy * headW + independentY;
+        const w = heartW * item.scale;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(
+          (c.roll +
+            (facingMode === "user" ? -item.rotate : item.rotate)) *
+            Math.PI /
+            180
+        );
+        ctx.globalAlpha = item.opacity;
+
+        if (useNativeAppleEmojiRef.current) {
+          ctx.font = `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
+          ctx.fillText(HEART_EMOJI, 0, 0);
+        } else if (heartImgRef.current) {
+          const h = w * 1.02;
+          ctx.drawImage(heartImgRef.current, -w / 2, -h / 2, w, h);
+        }
+
+        ctx.restore();
+      }
+
+      ctx.globalAlpha = 1;
     }
 
     return canvas.toDataURL("image/jpeg", 0.92);
@@ -314,7 +669,7 @@ function BoothContent() {
         const off = document.createElement("canvas");
         off.width = targetW;
         off.height = targetH;
-        const ctx = off.getContext("2d");
+        const ctx = off.getContext("2d", { willReadFrequently: true });
         if (!ctx) return reject(new Error("no ctx"));
 
         const srcRatio = img.width / img.height;
@@ -386,7 +741,7 @@ function BoothContent() {
         )}
         {layout.themeOverlay === "hearts" && faceStatus === "error" && (
           <p className="mt-1 font-[family-name:var(--font-mono)] text-[9px] text-curtain">
-            heart filter unavailable — check your connection and refresh
+            heart filter unavailable — check the console for details
           </p>
         )}
       </div>
@@ -432,17 +787,11 @@ function BoothContent() {
             className={`h-full w-full object-cover transition-opacity duration-300 ${status === "ready" ? "opacity-100" : "opacity-0"} ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
           />
 
-          {layout.themeOverlay === "hearts" && facePos && status === "ready" && (
-            <img
-              src={twemojiUrl("💗")}
-              alt=""
-              className="pointer-events-none absolute animate-bounce"
-              style={{
-                left: facingMode === "user" ? `${100 - facePos.xPct}%` : `${facePos.xPct}%`,
-                top: `${Math.max(2, facePos.yPct - 10)}%`,
-                width: `${Math.min(40, facePos.widthPct * 0.9)}%`,
-                transform: "translate(-50%, -50%)",
-              }}
+          {layout.themeOverlay === "hearts" && (
+            <canvas
+              ref={overlayCanvasRef}
+              aria-hidden="true"
+              className={`pointer-events-none absolute inset-0 z-20 h-full w-full ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
             />
           )}
 
@@ -510,7 +859,7 @@ function BoothContent() {
             disabled={isCapturing}
             className="rounded-full border-2 border-ink/10 bg-white px-2.5 py-2 text-[10px] font-medium text-ink hover:border-curtain/40 disabled:opacity-40"
           >
-            📁 Upload
+            📁Upload from device
           </button>
         </div>
       </div>

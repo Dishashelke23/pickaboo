@@ -38,13 +38,13 @@ const CROWN_OFFSETS = [
   // Deliberately irregular: the reference is NOT a neat side-by-side arch.
   // Each heart has its own depth, opacity and vertical motion.
  
-  { dx: -0.38, dy: -0.055, scale: 0.62, rotate: -8, opacity: 0.82, amp: 0.045, phase: 2.30, speed: 0.86 },
-  { dx: -0.25, dy: -0.125, scale: 0.83, rotate: -5, opacity: 0.82, amp: 0.038, phase: 4.10, speed: 1.08 },
-  { dx: -0.105, dy: -0.165, scale: 0.90, rotate: -2, opacity: 1.00, amp: 0.052, phase: 1.05, speed: 0.92 },
+  { dx: -0.32, dy: -0.055, scale: 0.62, rotate: -8, opacity: 0.42, amp: 0.045, phase: 2.30, speed: 0.86 },
+  { dx: -0.25, dy: -0.125, scale: 0.83, rotate: -5, opacity: 0.62, amp: 0.038, phase: 4.10, speed: 1.08 },
+  { dx: -0.105, dy: -0.165, scale: 0.85, rotate: -2, opacity: 0.90, amp: 0.052, phase: 1.05, speed: 0.92 },
   { dx: 0.030, dy: -0.135, scale: 0.94, rotate: 2, opacity: 0.86, amp: 0.040, phase: 3.20, speed: 1.15 },
-  { dx: 0.160, dy: -0.175, scale: 0.58, rotate: 5, opacity: 0.76, amp: 0.050, phase: 5.10, speed: 0.82 },
-  { dx: 0.285, dy: -0.090, scale: 0.88, rotate: 8, opacity: 0.50, amp: 0.034, phase: 0.90, speed: 1.03 },
-  { dx: 0.405, dy: 0.000, scale: 0.76, rotate: 12, opacity: 0.66, amp: 0.048, phase: 3.85, speed: 0.88 },
+  { dx: 0.120, dy: -0.175, scale: 0.58, rotate: 5, opacity: 0.76, amp: 0.050, phase: 5.10, speed: 0.82 },
+  { dx: 0.185, dy: -0.090, scale: 0.78, rotate: 8, opacity: 0.50, amp: 0.034, phase: 0.90, speed: 1.03 },
+  { dx: 0.300, dy: 0.000, scale: 0.66, rotate: 12, opacity: 0.66, amp: 0.048, phase: 3.85, speed: 0.88 },
  
 ];
 
@@ -77,9 +77,26 @@ function getCrownTarget(result: any): CrownTarget | null {
   if (landmarks?.positions?.length >= 27) {
     const brows = landmarks.positions.slice(17, 27);
     if (brows.length) {
-      cx = brows.reduce((sum: number, p: any) => sum + p.x, 0) / brows.length;
-      browY = Math.min(...brows.map((p: any) => p.y));
-    }
+  const landmarkCx =
+    brows.reduce((sum: number, p: any) => sum + p.x, 0) / brows.length;
+
+  const landmarkY =
+    Math.min(...brows.map((p: any) => p.y));
+
+  // Blend landmarks with the detector box.
+  // This keeps tracking stable during strong head tilts.
+  cx = lerp(
+    box.x + box.width / 2,
+    landmarkCx,
+    0.65
+  );
+
+  browY = lerp(
+    box.y + box.height * 0.30,
+    landmarkY,
+    0.65
+  );
+}
   }
 
   // Move above the eyebrows into the hair/crown area.
@@ -330,7 +347,7 @@ function BoothContent() {
           videoRef.current,
           new faceapi.TinyFaceDetectorOptions({
             inputSize: 224,
-            scoreThreshold: 0.35,
+            scoreThreshold: 0.15,
           })
         );
 
@@ -370,13 +387,12 @@ function BoothContent() {
           crownVisibleRef.current = true;
           crownMissesRef.current = 0;
         } else {
-          crownMissesRef.current += 1;
+  crownMissesRef.current += 1;
 
-          // Keep the crown alive through temporary detector misses.
-          if (crownMissesRef.current > 10) {
-            crownVisibleRef.current = false;
-          }
-        }
+  if (crownMissesRef.current > 45) {
+    crownVisibleRef.current = false;
+  }
+}
       } catch (error) {
         console.warn("Heart tracking frame failed:", error);
       } finally {
@@ -400,8 +416,7 @@ function BoothContent() {
   };
 }, [faceStatus, status, layout.themeOverlay]);
 
-  // 60 FPS compositor for the crown. React state is deliberately not used
-  // here: state updates would cause needless re-renders and visible jitter.
+  
   useEffect(() => {
     if (layout.themeOverlay !== "hearts") return;
 
@@ -457,7 +472,7 @@ function BoothContent() {
             } else {
               // Exponential smoothing: fast enough to follow movement but
               // slow enough to eliminate detector jitter.
-              const s = 0.30;
+              const s = 0.18;
               crownCurrentRef.current.cx = lerp(crownCurrentRef.current.cx, target.cx, s);
               crownCurrentRef.current.anchorY = lerp(crownCurrentRef.current.anchorY, target.anchorY, s);
               crownCurrentRef.current.headWidth = lerp(crownCurrentRef.current.headWidth, target.headWidth, s);
@@ -483,7 +498,7 @@ function BoothContent() {
 
             // The reference has individual hearts drifting independently.
             // They do NOT move as one group: some rise while others fall.
-            const heartW = Math.max(24, Math.min(94, headW * 0.235));
+            const heartW = Math.max(24, Math.min(94, headW * 0.220));
             const now = performance.now() / 1000;
 
             ctx.globalCompositeOperation = "source-over";

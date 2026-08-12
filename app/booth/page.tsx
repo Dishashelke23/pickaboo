@@ -37,15 +37,15 @@ const FACE_MODELS_URL = "/models";
 const CROWN_OFFSETS = [
   // Deliberately irregular: the reference is NOT a neat side-by-side arch.
   // Each heart has its own depth, opacity and vertical motion.
-  { dx: -0.49, dy: 0.060, scale: 0.70, rotate: -13, opacity: 0.58, amp: 0.030, phase: 0.15, speed: 1.00 },
-  { dx: -0.38, dy: -0.055, scale: 0.82, rotate: -8, opacity: 0.82, amp: 0.045, phase: 2.30, speed: 0.86 },
-  { dx: -0.25, dy: -0.125, scale: 0.93, rotate: -5, opacity: 0.92, amp: 0.038, phase: 4.10, speed: 1.08 },
-  { dx: -0.105, dy: -0.165, scale: 1.00, rotate: -2, opacity: 1.00, amp: 0.052, phase: 1.05, speed: 0.92 },
-  { dx: 0.030, dy: -0.135, scale: 1.04, rotate: 2, opacity: 0.96, amp: 0.040, phase: 3.20, speed: 1.15 },
-  { dx: 0.160, dy: -0.175, scale: 0.98, rotate: 5, opacity: 0.76, amp: 0.050, phase: 5.10, speed: 0.82 },
-  { dx: 0.285, dy: -0.090, scale: 0.88, rotate: 8, opacity: 0.90, amp: 0.034, phase: 0.90, speed: 1.03 },
+ 
+  { dx: -0.38, dy: -0.055, scale: 0.62, rotate: -8, opacity: 0.82, amp: 0.045, phase: 2.30, speed: 0.86 },
+  { dx: -0.25, dy: -0.125, scale: 0.83, rotate: -5, opacity: 0.82, amp: 0.038, phase: 4.10, speed: 1.08 },
+  { dx: -0.105, dy: -0.165, scale: 0.90, rotate: -2, opacity: 1.00, amp: 0.052, phase: 1.05, speed: 0.92 },
+  { dx: 0.030, dy: -0.135, scale: 0.94, rotate: 2, opacity: 0.86, amp: 0.040, phase: 3.20, speed: 1.15 },
+  { dx: 0.160, dy: -0.175, scale: 0.58, rotate: 5, opacity: 0.76, amp: 0.050, phase: 5.10, speed: 0.82 },
+  { dx: 0.285, dy: -0.090, scale: 0.88, rotate: 8, opacity: 0.50, amp: 0.034, phase: 0.90, speed: 1.03 },
   { dx: 0.405, dy: 0.000, scale: 0.76, rotate: 12, opacity: 0.66, amp: 0.048, phase: 3.85, speed: 0.88 },
-  { dx: 0.515, dy: 0.075, scale: 0.62, rotate: 17, opacity: 0.52, amp: 0.028, phase: 5.65, speed: 1.10 },
+ 
 ];
 
 const HEART_EMOJI = "💗";

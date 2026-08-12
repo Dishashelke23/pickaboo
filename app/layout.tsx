@@ -26,7 +26,7 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "Pickaboo — Strike a pose",
+  title: "Pickaboo | Free Online Photobooth",
   description: "A fun, fast web photobooth. Snap, filter, decorate, download.",
 };
 

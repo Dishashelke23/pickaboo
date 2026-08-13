@@ -120,6 +120,17 @@ export default function Home() {
           </button>
         </div>
       </div>
+     
+     <footer className="mt-16 flex justify-center pb-6">
+  
+    <a href="/legal"
+    className="font-[family-name:var(--font-mono)] text-xs text-ink/40 hover:text-curtain"
+  >
+    Privacy Policy & Terms of Use
+  </a>
+</footer>
+     
+
     </main>
   );
 }

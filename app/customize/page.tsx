@@ -6,7 +6,7 @@ import html2canvas from "html2canvas-pro";
 import { LAYOUTS, LayoutOption, getLayout } from "../layouts";
 
 type Slot = { xPct: number; yPct: number; wPct: number; hPct: number };
-type StickerEl = { id: string; kind: "sticker"; emoji: string; xPct: number; yPct: number; size: number };
+type StickerEl = { id: string; kind: "sticker"; stickerId: string; xPct: number; yPct: number; size: number };
 type TextEl = { id: string; kind: "text"; text: string; xPct: number; yPct: number; size: number; color: string; fontId: string };
 type CanvasEl = StickerEl | TextEl;
 type BgChoice = { backgroundColor?: string; backgroundImage?: string; backgroundSize?: string; dark: boolean };
@@ -41,29 +41,87 @@ const GRADIENTS = [
 function svgToDataUri(svg: string): string {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
+function svgToImgSrc(svg: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
 
 const PATTERNS = [
   { id: "dots", label: "Dots", dark: false, backgroundColor: "#FBF6EC", backgroundImage: svgToDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="2" cy="2" r="1.5" fill="#22101933"/></svg>`), backgroundSize: "16px 16px" },
   { id: "dots-dark", label: "Dots Dark", dark: true, backgroundColor: "#221019", backgroundImage: svgToDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="2" cy="2" r="1.5" fill="#FBF6EC33"/></svg>`), backgroundSize: "16px 16px" },
   { id: "stripes", label: "Stripes", dark: false, backgroundColor: "#FBF6EC", backgroundImage: svgToDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path d="M0 16L16 0" stroke="#B3222B33" stroke-width="3"/><path d="M-4 4L4 -4" stroke="#B3222B33" stroke-width="3"/><path d="M12 20L20 12" stroke="#B3222B33" stroke-width="3"/></svg>`), backgroundSize: "16px 16px" },
   { id: "grid", label: "Grid", dark: false, backgroundColor: "#FFFFFF", backgroundImage: svgToDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"><path d="M14 0H0V14" fill="none" stroke="#22101922" stroke-width="1"/></svg>`), backgroundSize: "14px 14px" },
+  { id: "checker", label: "Checkered", dark: false, backgroundColor: "#FFFFFF", backgroundImage: svgToDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="10" height="10" fill="#22101922"/><rect x="10" y="10" width="10" height="10" fill="#22101922"/></svg>`), backgroundSize: "20px 20px" },
+  { id: "gingham", label: "Gingham", dark: false, backgroundColor: "#FBF6EC", backgroundImage: svgToDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="10" height="10" fill="#B3222B22"/><rect x="10" y="10" width="10" height="10" fill="#B3222B22"/><rect x="5" y="5" width="10" height="10" fill="#B3222B33"/></svg>`), backgroundSize: "20px 20px" },
+  { id: "plaid", label: "Plaid", dark: false, backgroundColor: "#FBF6EC", backgroundImage: svgToDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect y="4" width="24" height="3" fill="#22101922"/><rect y="16" width="24" height="3" fill="#22101922"/><rect x="4" width="3" height="24" fill="#B3222B22"/><rect x="16" width="3" height="24" fill="#B3222B22"/></svg>`), backgroundSize: "24px 24px" },
+  {
+    id: "leopard",
+    label: "Leopard",
+    dark: false,
+    backgroundColor: "#E8C39E",
+    backgroundImage: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><g fill="none" stroke="#6B4226" stroke-width="2"><path d="M8 10 q3 -4 7 -1 q3 3 -1 6 q-4 2 -6 -2 q-1 -2 0 -3z"/><path d="M25 6 q3 -3 6 0 q2 3 -1 5 q-3 2 -5 -1 q-1 -2 0 -4z"/><path d="M14 25 q3 -3 6 0 q2 3 -1 5 q-3 2 -5 -1 q-1 -2 0 -4z"/><path d="M30 22 q3 -3 6 0 q2 3 -1 5 q-3 2 -5 -1 q-1 -2 0 -4z"/><path d="M4 30 q2 -2 4 0 q1 2 -1 3 q-2 1 -3 -1 q-1 -1 0 -2z"/></g></svg>`
+    ),
+    backgroundSize: "40px 40px",
+  },
+  {
+    id: "cow",
+    label: "Cow Print",
+    dark: false,
+    backgroundColor: "#FFFFFF",
+    backgroundImage: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44"><path d="M4 6 q6 -6 12 -2 q4 3 0 8 q-5 4 -10 0 q-4 -3 -2 -6z" fill="#221019"/><path d="M26 20 q7 -5 13 0 q3 4 -2 8 q-6 4 -11 -1 q-3 -3 0 -7z" fill="#221019"/><path d="M8 28 q5 -4 10 0 q3 3 -1 6 q-4 3 -8 -1 q-2 -2 -1 -5z" fill="#221019"/></svg>`
+    ),
+    backgroundSize: "44px 44px",
+  },
+  {
+    id: "galaxy",
+    label: "Galaxy",
+    dark: true,
+    backgroundColor: "#221019",
+    backgroundImage: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"><g fill="#FBF6EC"><circle cx="5" cy="6" r="0.8"/><circle cx="18" cy="4" r="0.6"/><circle cx="24" cy="14" r="1"/><circle cx="10" cy="20" r="0.7"/><circle cx="22" cy="24" r="0.6"/><circle cx="2" cy="16" r="0.5"/></g></svg>`
+    ),
+    backgroundSize: "30px 30px",
+  },
 ];
 
-const STICKER_OPTIONS = ["✨", "💖", "🎀", "🫧", "🚀", "🌈", "🦋", "⭐", "🍒", "🌸", "🔥", "👑"];
+const STICKERS = [
+  { id: "bow", label: "Bow", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32"><path d="M24 16 C24 16 18 4 8 4 C2 4 0 9 0 12 C0 17 6 20 12 20 C18 20 24 16 24 16 Z" fill="#F2789F" stroke="#B3222B" stroke-width="1.5"/><path d="M24 16 C24 16 30 4 40 4 C46 4 48 9 48 12 C48 17 42 20 36 20 C30 20 24 16 24 16 Z" fill="#F2789F" stroke="#B3222B" stroke-width="1.5"/><circle cx="24" cy="16" r="4" fill="#B3222B"/></svg>` },
+  { id: "heart", label: "Heart", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 28"><path d="M16 26 C4 18 0 11 0 6.5 C0 2 3.5 0 7 0 C10 0 13 1.5 16 6 C19 1.5 22 0 25 0 C28.5 0 32 2 32 6.5 C32 11 28 18 16 26 Z" fill="#F2789F" stroke="#B3222B" stroke-width="1"/></svg>` },
+  { id: "star", label: "Star", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 1 L15 9 L23 9 L16.5 14 L19 22 L12 17 L5 22 L7.5 14 L1 9 L9 9 Z" fill="#F4B740" stroke="#B3222B" stroke-width="1"/></svg>` },
+  { id: "sparkle", label: "Sparkle", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 0 C12 6 14 10 24 12 C14 14 12 18 12 24 C12 18 10 14 0 12 C10 10 12 6 12 0 Z" fill="#FBF6EC" stroke="#F4B740" stroke-width="1"/></svg>` },
+  { id: "flower", label: "Flower", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><g fill="#F2789F" stroke="#B3222B" stroke-width="1"><circle cx="20" cy="8" r="7"/><circle cx="32" cy="16" r="7"/><circle cx="27" cy="30" r="7"/><circle cx="13" cy="30" r="7"/><circle cx="8" cy="16" r="7"/></g><circle cx="20" cy="20" r="6" fill="#F4B740"/></svg>` },
+  { id: "cloud", label: "Cloud", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 28"><path d="M12 22 C4 22 0 17 4 12 C2 5 12 2 16 7 C20 1 32 2 32 10 C40 8 44 16 38 20 C40 24 34 26 30 24 C26 27 14 27 12 22 Z" fill="#FFFFFF" stroke="#221019" stroke-width="1.2"/></svg>` },
+  { id: "butterfly", label: "Butterfly", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 32"><g stroke="#221019" stroke-width="1"><path d="M20 6 C14 -2 2 0 4 10 C5 16 14 16 20 10 Z" fill="#6FBFA0"/><path d="M20 6 C26 -2 38 0 36 10 C35 16 26 16 20 10 Z" fill="#6FBFA0"/><path d="M20 10 C14 18 4 20 6 27 C8 32 16 26 20 18 Z" fill="#F2789F"/><path d="M20 10 C26 18 36 20 34 27 C32 32 24 26 20 18 Z" fill="#F2789F"/></g><line x1="20" y1="4" x2="20" y2="20" stroke="#221019" stroke-width="1.5"/></svg>` },
+  { id: "crown", label: "Crown", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 28"><path d="M2 26 L2 12 L10 18 L20 6 L30 18 L38 12 L38 26 Z" fill="#F4B740" stroke="#B3222B" stroke-width="1.2"/><circle cx="2" cy="10" r="3" fill="#F2789F"/><circle cx="20" cy="4" r="3" fill="#F2789F"/><circle cx="38" cy="10" r="3" fill="#F2789F"/></svg>` },
+  { id: "ribbon", label: "Ribbon", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 24"><path d="M4 2 L36 2 L36 18 L20 24 L4 18 Z" fill="#B3222B"/><path d="M4 18 L4 24 L10 20 Z" fill="#7C171F"/><path d="M36 18 L36 24 L30 20 Z" fill="#7C171F"/></svg>` },
+  { id: "moon", label: "Moon", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 3 C11 3 6 8 6 14 C6 20 11 21 15 19 C10 18 7 14 8 9 C9 5 13 3 17 3 Z" fill="#F4B740" stroke="#B3222B" stroke-width="0.8"/></svg>` },
+  { id: "rabbit", label: "Rabbit", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 44"><ellipse cx="12" cy="8" rx="4" ry="12" fill="#FFFFFF" stroke="#221019" stroke-width="1"/><ellipse cx="28" cy="8" rx="4" ry="12" fill="#FFFFFF" stroke="#221019" stroke-width="1"/><ellipse cx="12" cy="9" rx="1.8" ry="8" fill="#F2789F"/><ellipse cx="28" cy="9" rx="1.8" ry="8" fill="#F2789F"/><circle cx="20" cy="28" r="14" fill="#FFFFFF" stroke="#221019" stroke-width="1"/><circle cx="15" cy="26" r="1.6" fill="#221019"/><circle cx="25" cy="26" r="1.6" fill="#221019"/><ellipse cx="20" cy="31" rx="1.8" ry="1.3" fill="#F2789F"/></svg>` },
+  { id: "clover", label: "Clover", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><g fill="#6FBFA0" stroke="#3F7A5C" stroke-width="1"><path d="M16 16 C16 8 8 6 6 12 C4 18 12 18 16 16Z"/><path d="M16 16 C24 8 26 16 20 18 C14 20 12 18 16 16Z"/><path d="M16 16 C24 20 22 28 16 26 C10 24 12 18 16 16Z"/><path d="M16 16 C8 20 6 26 12 28 C18 30 18 20 16 16Z"/></g><line x1="16" y1="16" x2="16" y2="30" stroke="#3F7A5C" stroke-width="1.5"/></svg>` },
+  { id: "lips", label: "Lips", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 24"><path d="M20 4 C14 0 4 4 2 10 C1 13 4 14 8 12 C13 10 17 9 20 12 C23 9 27 10 32 12 C36 14 39 13 38 10 C36 4 26 0 20 4Z" fill="#B3222B" stroke="#7C171F" stroke-width="1"/><path d="M8 12 C13 15 27 15 32 12 C29 18 11 18 8 12Z" fill="#7C171F"/></svg>` },
+  { id: "seal", label: "Seal", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 32"><ellipse cx="18" cy="18" rx="16" ry="12" fill="#D8D3C8" stroke="#221019" stroke-width="1"/><path d="M30 22 C36 22 38 28 32 28 C28 28 26 24 30 22Z" fill="#D8D3C8" stroke="#221019" stroke-width="1"/><circle cx="12" cy="16" r="1.5" fill="#221019"/><circle cx="20" cy="16" r="1.5" fill="#221019"/><ellipse cx="16" cy="21" rx="2" ry="1.3" fill="#221019"/></svg>` },
+  { id: "chick", label: "Chick", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="20" r="11" fill="#F4B740" stroke="#B3222B" stroke-width="1"/><circle cx="16" cy="9" r="7" fill="#F4B740" stroke="#B3222B" stroke-width="1"/><circle cx="13" cy="8" r="1.2" fill="#221019"/><circle cx="19" cy="8" r="1.2" fill="#221019"/><path d="M14 11 L18 11 L16 14Z" fill="#B3222B"/></svg>` },
+  { id: "bear", label: "Bear", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="9" cy="8" r="6" fill="#C99866" stroke="#7C5A3A" stroke-width="1"/><circle cx="31" cy="8" r="6" fill="#C99866" stroke="#7C5A3A" stroke-width="1"/><circle cx="20" cy="22" r="16" fill="#C99866" stroke="#7C5A3A" stroke-width="1"/><ellipse cx="20" cy="27" rx="7" ry="5" fill="#E8CBA6"/><circle cx="14" cy="19" r="1.6" fill="#221019"/><circle cx="26" cy="19" r="1.6" fill="#221019"/><ellipse cx="20" cy="24" rx="1.6" ry="1.2" fill="#221019"/></svg>` },
+  { id: "cat", label: "Cat", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 36"><path d="M4 4 L14 12 L6 16Z" fill="#FBF6EC" stroke="#221019" stroke-width="1"/><path d="M36 4 L26 12 L34 16Z" fill="#FBF6EC" stroke="#221019" stroke-width="1"/><circle cx="20" cy="20" r="14" fill="#FBF6EC" stroke="#221019" stroke-width="1"/><circle cx="15" cy="18" r="1.6" fill="#221019"/><circle cx="25" cy="18" r="1.6" fill="#221019"/><path d="M18 23 Q20 25 22 23" stroke="#221019" stroke-width="1" fill="none"/></svg>` },
+  { id: "dog", label: "Dog", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 36"><path d="M6 6 Q0 18 8 24 Q10 14 14 10Z" fill="#C99866" stroke="#7C5A3A" stroke-width="1"/><path d="M34 6 Q40 18 32 24 Q30 14 26 10Z" fill="#C99866" stroke="#7C5A3A" stroke-width="1"/><circle cx="20" cy="20" r="13" fill="#E8CBA6" stroke="#7C5A3A" stroke-width="1"/><circle cx="15" cy="18" r="1.6" fill="#221019"/><circle cx="25" cy="18" r="1.6" fill="#221019"/><ellipse cx="20" cy="24" rx="2.4" ry="1.6" fill="#221019"/></svg>` },
+  { id: "strawberry", label: "Strawberry", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 36"><path d="M16 34 C4 24 2 12 16 12 C30 12 28 24 16 34Z" fill="#B3222B" stroke="#7C171F" stroke-width="1"/><g fill="#F4B740"><circle cx="11" cy="18" r="1"/><circle cx="16" cy="16" r="1"/><circle cx="21" cy="18" r="1"/><circle cx="9" cy="24" r="1"/><circle cx="16" cy="23" r="1"/><circle cx="23" cy="24" r="1"/><circle cx="13" cy="29" r="1"/><circle cx="19" cy="29" r="1"/></g><path d="M16 12 L10 4 L16 8 L22 4Z" fill="#6FBFA0"/></svg>` },
+  { id: "donut", label: "Donut", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#E8B896" stroke="#B3222B" stroke-width="1"/><circle cx="20" cy="20" r="6" fill="#FBF6EC"/><path d="M20 4 A16 16 0 0 1 36 20" fill="none" stroke="#F2789F" stroke-width="7"/><g fill="#6FBFA0"><circle cx="14" cy="7" r="1"/><circle cx="26" cy="6" r="1"/><circle cx="31" cy="12" r="1"/></g></svg>` },
+  { id: "mushroom", label: "Mushroom", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 36"><path d="M4 16 C4 4 28 4 28 16 Z" fill="#B3222B" stroke="#7C171F" stroke-width="1"/><g fill="#FFFFFF"><circle cx="10" cy="10" r="2"/><circle cx="20" cy="8" r="2"/><circle cx="16" cy="13" r="1.5"/></g><rect x="10" y="16" width="12" height="16" rx="4" fill="#FBF6EC" stroke="#221019" stroke-width="1"/></svg>` },
+  { id: "gem", label: "Gem", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 28"><path d="M4 10 L10 2 L22 2 L28 10 L16 26Z" fill="#6FBFA0" stroke="#3F7A5C" stroke-width="1"/><path d="M4 10 L28 10 L16 26Z" fill="#8FD6B8"/><path d="M10 2 L16 10 L22 2" fill="none" stroke="#3F7A5C" stroke-width="0.8"/></svg>` },
+  { id: "cactus", label: "Cactus", svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40"><rect x="6" y="26" width="20" height="10" rx="2" fill="#E8C39E" stroke="#B3222B" stroke-width="1"/><rect x="12" y="8" width="8" height="22" rx="4" fill="#6FBFA0" stroke="#3F7A5C" stroke-width="1"/><path d="M12 16 C4 16 4 10 8 8 C10 7 12 9 12 12Z" fill="#6FBFA0" stroke="#3F7A5C" stroke-width="1"/><path d="M20 20 C28 20 28 14 24 12 C22 11 20 13 20 16Z" fill="#6FBFA0" stroke="#3F7A5C" stroke-width="1"/></svg>` },
+];
+
+function getStickerSrc(stickerId: string): string {
+  const found = STICKERS.find((s) => s.id === stickerId);
+  return svgToImgSrc(found ? found.svg : STICKERS[0].svg);
+}
+
 const FONT_OPTIONS = [
   { id: "display", label: "Bungee", css: "var(--font-display)" },
   { id: "script", label: "Caveat", css: "var(--font-script)" },
   { id: "body", label: "DM Sans", css: "var(--font-body)" },
   { id: "mono", label: "Mono", css: "var(--font-mono)" },
 ];
-
-const TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/";
-function toTwemojiCodepoint(emoji: string): string {
-  return Array.from(emoji).map((c) => c.codePointAt(0)!.toString(16)).filter((h) => h !== "fe0f").join("-");
-}
-function twemojiUrl(emoji: string): string {
-  return `${TWEMOJI_BASE}${toTwemojiCodepoint(emoji)}.png`;
-}
 
 function buildLayoutSlots(layout: LayoutOption, count: number): Slot[] {
   const gap = layout.gap;
@@ -156,9 +214,9 @@ export default function CustomizePage() {
     ? `min(66vh, calc((100vw - 460px) / ${layout.aspectValue}))`
     : `min(46vh, calc((100vw - 48px) / ${layout.aspectValue}))`;
 
-  function addSticker(emoji: string) {
+  function addSticker(stickerId: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setElements((prev) => [...prev, { id, kind: "sticker", emoji, xPct: 50, yPct: 50, size: 44 }]);
+    setElements((prev) => [...prev, { id, kind: "sticker", stickerId, xPct: 50, yPct: 50, size: 44 }]);
     setSelectedId(id);
   }
   function addText() {
@@ -237,46 +295,46 @@ export default function CustomizePage() {
   }
 
   async function handleDownloadGif() {
-  if (isExportingGif || captures.length === 0) return;
-  setIsExportingGif(true);
-  try {
-    const GIFModule: any = await import("gif.js");
-    const GIFCtor = GIFModule.default ?? GIFModule;
+    if (isExportingGif || captures.length === 0) return;
+    setIsExportingGif(true);
+    try {
+      const GIFModule: any = await import("gif.js");
+      const GIFCtor = GIFModule.default ?? GIFModule;
 
-    const gif = new GIFCtor({
-      workers: 2,
-      quality: 10,
-      workerScript: "/gif.worker.js",
-    });
+      const gif = new GIFCtor({
+        workers: 2,
+        quality: 10,
+        workerScript: "/gif.worker.js",
+      });
 
-    for (const src of captures) {
-      const img = await loadImageEl(src);
-      gif.addFrame(img, { delay: 600 });
+      for (const src of captures) {
+        const img = await loadImageEl(src);
+        gif.addFrame(img, { delay: 600 });
+      }
+
+      const blob: Blob = await new Promise((resolve) => {
+        gif.on("finished", (b: Blob) => resolve(b));
+        gif.render();
+      });
+
+      const url = URL.createObjectURL(blob);
+      if (isIOSDevice()) {
+        setGifPreviewUrl(url);
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "pickaboo-strip.gif";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+    } catch (err) {
+      console.error("GIF export failed:", err);
+    } finally {
+      setIsExportingGif(false);
     }
-
-    const blob: Blob = await new Promise((resolve) => {
-      gif.on("finished", (b: Blob) => resolve(b));
-      gif.render();
-    });
-
-    const url = URL.createObjectURL(blob);
-    if (isIOSDevice()) {
-      setGifPreviewUrl(url);
-    } else {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "pickaboo-strip.gif";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    }
-  } catch (err) {
-    console.error("GIF export failed:", err);
-  } finally {
-    setIsExportingGif(false);
   }
-}
 
   if (captures.length === 0) return null;
 
@@ -339,7 +397,7 @@ export default function CustomizePage() {
                 }`}
               >
                 {el.kind === "sticker" && (
-                  <img src={twemojiUrl(el.emoji)} alt="" draggable={false} crossOrigin="anonymous" style={{ width: el.size, height: el.size }} className="drop-shadow-md" />
+                  <img src={getStickerSrc(el.stickerId)} alt="" draggable={false} style={{ width: el.size, height: el.size }} className="drop-shadow-md" />
                 )}
                 {el.kind === "text" && !isEditing && (
                   <p style={{ fontFamily: FONT_OPTIONS.find((f) => f.id === el.fontId)?.css, color: el.color, fontSize: el.size }} className="whitespace-nowrap px-1 leading-tight">
@@ -391,7 +449,7 @@ export default function CustomizePage() {
           </div>
 
           <div className="w-full">
-            <p className="mb-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest text-ink/50 sm:text-xs">Colors & Patterns</p>
+            <p className="mb-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest text-ink/50 sm:text-xs">Colors &amp; Patterns</p>
             <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 md:justify-start">
               {SOLIDS.map((s) => (
                 <button
@@ -438,9 +496,9 @@ export default function CustomizePage() {
           <div className="w-full">
             <p className="mb-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-widest text-ink/50 sm:text-xs">Stickers</p>
             <div className="grid grid-cols-6 gap-2 md:grid-cols-4">
-              {STICKER_OPTIONS.map((emoji) => (
-                <button key={emoji} onClick={() => addSticker(emoji)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white p-1.5 ring-1 ring-ink/10 transition-transform hover:scale-110 active:scale-95 sm:h-10 sm:w-10">
-                  <img src={twemojiUrl(emoji)} alt={emoji} draggable={false} className="h-full w-full" />
+              {STICKERS.map((s) => (
+                <button key={s.id} onClick={() => addSticker(s.id)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white p-1.5 ring-1 ring-ink/10 transition-transform hover:scale-110 active:scale-95 sm:h-10 sm:w-10" title={s.label}>
+                  <img src={svgToImgSrc(s.svg)} alt={s.label} draggable={false} className="h-full w-full" />
                 </button>
               ))}
             </div>

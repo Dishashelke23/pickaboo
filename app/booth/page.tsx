@@ -761,10 +761,11 @@ function BoothContent() {
         )}
       </div>
 
-      <div className="flex w-full flex-col items-center justify-start gap-4 lg:flex-row lg:items-stretch lg:justify-center lg:gap-8">
+      <div className="relative flex w-full flex-col items-center justify-start gap-5 lg:flex-row lg:items-stretch lg:justify-center lg:gap-8">
+        <div className="relative flex w-full items-center justify-center lg:w-auto">
         <div
           style={{ height: columnHeight }}
-          className="hidden min-h-0 flex-col items-center gap-2 overflow-y-auto px-1.5 py-2 sm:px-2 sm:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex"
+          className="absolute right-full top-[60%] -mr-15 flex min-h-0 -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto px-1 py-2 sm:-mr-6 sm:gap-3 sm:px-2 sm:py-3 lg:static lg:mr-0 lg:translate-y-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {FILTERS.map((f) => {
             const isSelected = selectedFilter.id === f.id;
@@ -791,7 +792,7 @@ function BoothContent() {
 
         <div
           
-          className="relative aspect-[3/4] h-[min(58dvh,118vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
+          className="relative aspect-[3/4] h-[min(54dvh,105vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
         >
           <video
             ref={videoRef}
@@ -846,6 +847,7 @@ function BoothContent() {
           )}
           <div className={`pointer-events-none absolute inset-0 bg-white transition-opacity duration-150 ${flash ? "opacity-90" : "opacity-0"}`} />
         </div>
+    </div>
 
         <div className="flex w-full flex-shrink-0 flex-col items-center justify-center gap-3 lg:w-auto lg:gap-3">
           <button

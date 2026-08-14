@@ -738,7 +738,7 @@ function BoothContent() {
   const columnHeight = "min(calc((100vw - 150px) * 1.3333), calc(100dvh - 220px), 620px)";
 
   return (
-    <main className="relative mx-auto flex h-dvh w-full max-w-6xl flex-col items-center justify-center overflow-hidden px-3 py-3 sm:px-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-6xl flex-col items-center justify-start overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 lg:h-dvh lg:justify-center lg:overflow-hidden lg:py-3">
       <button
         onClick={() => router.push(retakeIndex !== null ? "/review" : "/")}
         disabled={isCapturing}
@@ -747,7 +747,7 @@ function BoothContent() {
         ← back
       </button>
 
-      <div className="mb-3 mt-2 flex flex-col items-center sm:mb-4 sm:mt-4">
+      <div className="mb-5 mt-16 flex w-full flex-col items-center text-center sm:mb-6 sm:mt-16 lg:mb-4 lg:mt-4">
         <h1 className="font-[family-name:var(--font-display)] text-xl text-ink sm:text-2xl md:text-3xl">
           {isCapturing ? "Hold that pose!" : retakeIndex !== null ? "Ready to retake?" : "Say cheese!"}
         </h1>
@@ -761,10 +761,10 @@ function BoothContent() {
         )}
       </div>
 
-      <div className="flex w-full items-stretch justify-center gap-2 sm:gap-4 md:gap-8">
+      <div className="flex w-full flex-col items-center justify-start gap-4 lg:flex-row lg:items-stretch lg:justify-center lg:gap-8">
         <div
           style={{ height: columnHeight }}
-          className="flex min-h-0 flex-col items-center gap-2 overflow-y-auto px-1.5 py-2 sm:gap-3 sm:px-2 sm:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="hidden min-h-0 flex-col items-center gap-2 overflow-y-auto px-1.5 py-2 sm:px-2 sm:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex"
         >
           {FILTERS.map((f) => {
             const isSelected = selectedFilter.id === f.id;
@@ -790,8 +790,8 @@ function BoothContent() {
         </div>
 
         <div
-          style={{ height: columnHeight }}
-          className="relative aspect-[3/4] flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8"
+          
+          className="relative aspect-[3/4] h-[min(58dvh,118vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
         >
           <video
             ref={videoRef}
@@ -847,7 +847,7 @@ function BoothContent() {
           <div className={`pointer-events-none absolute inset-0 bg-white transition-opacity duration-150 ${flash ? "opacity-90" : "opacity-0"}`} />
         </div>
 
-        <div style={{ height: columnHeight }} className="flex flex-shrink-0 flex-col items-center justify-center gap-2 sm:gap-3">
+        <div className="flex w-full flex-shrink-0 flex-col items-center justify-center gap-3 lg:w-auto lg:gap-3">
           <button
             onClick={runSession}
             disabled={isCapturing || status !== "ready"}
@@ -872,14 +872,14 @@ function BoothContent() {
           <button
             onClick={handleUploadClick}
             disabled={isCapturing}
-            className="rounded-full border-2 border-ink/10 bg-white px-2.5 py-2 text-[10px] font-medium text-ink hover:border-curtain/40 disabled:opacity-40"
+            className="rounded-full border-2 border-ink/10 bg-white px-4 py-2.5 text-xs font-medium text-ink hover:border-curtain/40 disabled:opacity-40 sm:px-5 sm:py-3 sm:text-sm"
           >
             📁Upload from device
           </button>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-5 flex items-center justify-center gap-2 sm:mt-6 lg:mt-3">
         <span className="font-[family-name:var(--font-mono)] text-[9px] text-ink/50">timer</span>
         {TIMER_OPTIONS.map((t) => (
           <button
@@ -895,7 +895,7 @@ function BoothContent() {
         ))}
       </div>
 
-      <p className="mt-2 font-[family-name:var(--font-mono)] text-[10px] text-ink/50 sm:text-xs">
+      <p className="mb-4 mt-2 font-[family-name:var(--font-mono)] text-center text-[10px] text-ink/50 sm:text-xs lg:mb-0">
         {retakeIndex !== null ? `Retaking shot ${retakeIndex + 1}` : `${layout.poses} shots queued`}
       </p>
 

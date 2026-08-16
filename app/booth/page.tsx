@@ -266,14 +266,12 @@ function BoothContent() {
   useEffect(() => {
     if (layout.themeOverlay !== "hearts") return;
 
-    // Use Apple's actual system emoji artwork when the app is running on an
-    // Apple device. On Windows/Linux we use the bundled reference-derived
-    // transparent heart so the site does not fall back to a random emoji set.
+    
     const ua = navigator.userAgent || "";
     const platform = navigator.platform || "";
-    useNativeAppleEmojiRef.current =
-      /Macintosh|Mac OS X|iPhone|iPad|iPod/.test(ua) ||
-      /Mac/.test(platform);
+    // Always use the bundled heart asset for consistency across every
+    // device — no native emoji fallback, on iOS or anywhere else.
+    useNativeAppleEmojiRef.current = false;
 
     const img = new Image();
     img.decoding = "async";
@@ -762,11 +760,10 @@ function BoothContent() {
       </div>
 
       <div className="relative flex w-full flex-col items-center justify-start gap-5 lg:flex-row lg:items-stretch lg:justify-center lg:gap-8">
-        <div className="relative flex w-full items-center justify-center lg:w-auto">
-        <div
-          style={{ height: columnHeight }}
-          className="absolute right-full top-[60%] -mr-15 flex min-h-0 -translate-y-1/2 flex-col items-center gap-2 overflow-y-auto px-1 py-2 sm:-mr-6 sm:gap-3 sm:px-2 sm:py-3 lg:static lg:mr-0 lg:translate-y-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
+        {/* Filters: normal horizontal-scroll row above the frame on mobile/tablet,
+            tall vertical column beside the frame at desktop — no absolute
+            positioning, so nothing can ever overlap or hide behind the frame. */}
+        <div className="flex w-full max-w-[420px] flex-row items-center gap-3 overflow-x-auto overflow-y-hidden px-2 py-1 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)] lg:w-auto lg:max-w-none lg:flex-col lg:justify-start lg:gap-3 lg:overflow-x-visible lg:overflow-y-auto lg:px-2 lg:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FILTERS.map((f) => {
             const isSelected = selectedFilter.id === f.id;
             return (
@@ -790,8 +787,8 @@ function BoothContent() {
           })}
         </div>
 
+        <div className="relative flex w-full items-center justify-center lg:w-auto">
         <div
-          
           className="relative aspect-[3/4] h-[min(54dvh,105vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
         >
           <video
@@ -881,8 +878,28 @@ function BoothContent() {
         </div>
       </div>
 
+      {(captured.length > 0 || retakeIndex === null) && (
+        <div className="mt-4 flex w-full max-w-md items-center justify-center gap-2 overflow-x-auto px-2 py-1 sm:mt-5 lg:mt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {captured.map((src, i) => (
+            <img
+              key={i}
+              src={src}
+              alt={`Shot ${i + 1}`}
+              className="h-14 w-11 flex-shrink-0 rounded-md border-2 border-curtain object-cover shadow-sm sm:h-16 sm:w-12"
+            />
+          ))}
+          {Array.from({ length: Math.max(0, totalShots - captured.length) }).map((_, i) => (
+            <div
+              key={`empty-${i}`}
+              className="h-14 w-11 flex-shrink-0 rounded-md border-2 border-dashed border-ink/15 bg-white/40 sm:h-16 sm:w-12"
+            />
+          ))}
+        </div>
+      )}
+
       <div className="mt-5 flex items-center justify-center gap-2 sm:mt-6 lg:mt-3">
         <span className="font-[family-name:var(--font-mono)] text-[9px] text-ink/50">timer</span>
+        
         {TIMER_OPTIONS.map((t) => (
           <button
             key={t}

@@ -129,9 +129,20 @@ function buildLayoutSlots(layout: LayoutOption, count: number): Slot[] {
   const rows = layout.rows;
 
   if (cols === 1) {
+    const wPct = 100 - padding * 2;
+    const photoAspect = 3 / 4; // matches capturePhoto's fixed 3:4 output
+    const idealCellH = (wPct * layout.aspectValue) / photoAspect;
     const usableH = 100 - padding * 2 - footerSpace - gap * (count - 1);
-    const cellH = usableH / count;
-    return Array.from({ length: count }, (_, i) => ({ xPct: padding, yPct: padding + i * (cellH + gap), wPct: 100 - padding * 2, hPct: cellH }));
+    const maxCellH = usableH / count;
+    const cellH = Math.min(idealCellH, maxCellH);
+    const totalUsed = cellH * count + gap * (count - 1);
+    const startY = padding + Math.max(0, (usableH - totalUsed) / 2);
+    return Array.from({ length: count }, (_, i) => ({
+      xPct: padding,
+      yPct: startY + i * (cellH + gap),
+      wPct,
+      hPct: cellH,
+    }));
   }
 
   const usableW = 100 - padding * 2 - gap * (cols - 1);
@@ -168,6 +179,26 @@ function loadImageEl(src: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = src;
   });
+}
+
+function roundCanvasCorners(source: HTMLCanvasElement, radiusPx: number): HTMLCanvasElement {
+  const output = document.createElement("canvas");
+  output.width = source.width;
+  output.height = source.height;
+  const ctx = output.getContext("2d");
+  if (!ctx) return source;
+
+  const r = Math.min(radiusPx, output.width / 2, output.height / 2);
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.arcTo(output.width, 0, output.width, output.height, r);
+  ctx.arcTo(output.width, output.height, 0, output.height, r);
+  ctx.arcTo(0, output.height, 0, 0, r);
+  ctx.arcTo(0, 0, output.width, 0, r);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(source, 0, 0);
+  return output;
 }
 
 export default function CustomizePage() {
@@ -269,7 +300,9 @@ export default function CustomizePage() {
     setIsExporting(true);
     await new Promise((r) => setTimeout(r, 60));
     try {
-      const rendered = await html2canvas(canvasRef.current, { backgroundColor: null, scale: 3, useCORS: true });
+      const EXPORT_SCALE = 3;
+      const rawRendered = await html2canvas(canvasRef.current, { backgroundColor: null, scale: EXPORT_SCALE, useCORS: true });
+      const rendered = roundCanvasCorners(rawRendered, frameStyle.outerRadius * EXPORT_SCALE);
       if (isIOSDevice()) {
         setPreviewImage(rendered.toDataURL("image/png"));
       } else {
@@ -355,6 +388,7 @@ export default function CustomizePage() {
             height: canvasHeight,
             aspectRatio: layout.aspect,
             borderRadius: frameStyle.outerRadius,
+            containerType: "inline-size",
             backgroundColor: background.backgroundColor ?? "transparent",
             backgroundImage: background.backgroundImage ?? "none",
             backgroundSize: background.backgroundSize ?? "auto",
@@ -374,11 +408,12 @@ export default function CustomizePage() {
 
           {layout.footerSize !== "none" && (
             <p
-              className={`absolute bottom-1 left-0 right-0 text-center font-[family-name:var(--font-mono)] tracking-widest ${
-                layout.footerSize === "small" ? "text-[7px]" : "text-[10px]"
-              } ${background.dark ? "text-paper/50" : "text-ink/40"}`}
+              style={{ fontSize: "clamp(6px, 2.6cqw, 12px)" }}
+              className={`absolute bottom-1 left-[8%] right-[8%] text-center font-[family-name:var(--font-mono)] tracking-widest ${
+                background.dark ? "text-paper/50" : "text-ink/40"
+              }`}
             >
-              PICKABOO • {new Date().getFullYear()}
+              PICKABOO
             </p>
           )}
 

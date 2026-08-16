@@ -555,21 +555,41 @@ function BoothContent() {
     const canvas = canvasRef.current;
     if (!video || !canvas) return null;
 
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-    canvas.width = width;
-    canvas.height = height;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return null;
+
+    // Fixed high-resolution 3:4 output — matches exactly what the live
+    // preview shows (object-cover center-crop), so nothing needs to be
+    // re-cropped later when placed into the strip.
+    const OUTPUT_W = 1080;
+    const OUTPUT_H = 1440;
+    const targetRatio = OUTPUT_W / OUTPUT_H;
+    const srcRatio = vw / vh;
+
+    let sx = 0, sy = 0, sw = vw, sh = vh;
+    if (srcRatio > targetRatio) {
+      sw = vh * targetRatio;
+      sx = (vw - sw) / 2;
+    } else {
+      sh = vw / targetRatio;
+      sy = (vh - sh) / 2;
+    }
+    const scale = OUTPUT_W / sw;
+
+    canvas.width = OUTPUT_W;
+    canvas.height = OUTPUT_H;
 
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return null;
 
     ctx.save();
-    if (facingMode === "user") { ctx.translate(width, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(video, 0, 0, width, height);
+    if (facingMode === "user") { ctx.translate(OUTPUT_W, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, OUTPUT_W, OUTPUT_H);
     ctx.restore();
 
     if (selectedFilter.ops.length > 0) {
-      const imageData = ctx.getImageData(0, 0, width, height);
+      const imageData = ctx.getImageData(0, 0, OUTPUT_W, OUTPUT_H);
       applyFilterOps(imageData, selectedFilter.ops);
       ctx.putImageData(imageData, 0, 0);
     }
@@ -582,11 +602,16 @@ function BoothContent() {
     ) {
       const c = crownCurrentRef.current;
 
-      const mirrorX = (x: number) =>
-        facingMode === "user" ? width - x : x;
+      // The tracked face position was measured in raw video pixel space —
+      // map it into our new cropped/scaled output space first.
+      const outCx = (c.cx - sx) * scale;
+      const outAnchorY = (c.anchorY - sy) * scale;
+      const outHeadW = c.headWidth * scale;
 
-      const centerX = mirrorX(c.cx);
-      const headW = c.headWidth;
+      const mirrorX = (x: number) =>
+        facingMode === "user" ? OUTPUT_W - x : x;
+
+      const headW = outHeadW;
       const heartW = Math.max(30, Math.min(150, headW * 0.235));
       const now = performance.now() / 1000;
 
@@ -600,9 +625,9 @@ function BoothContent() {
           item.amp *
           headW;
 
-        const rawX = c.cx + item.dx * headW;
+        const rawX = outCx + item.dx * headW;
         const x = mirrorX(rawX);
-        const y = c.anchorY + item.dy * headW + independentY;
+        const y = outAnchorY + item.dy * headW + independentY;
         const w = heartW * item.scale;
 
         ctx.save();
@@ -629,7 +654,7 @@ function BoothContent() {
       ctx.globalAlpha = 1;
     }
 
-    return canvas.toDataURL("image/jpeg", 0.92);
+    return canvas.toDataURL("image/jpeg", 0.95);
   }
 
   function finishAndProceed(newCaptures: string[]) {
@@ -678,7 +703,7 @@ function BoothContent() {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        const targetW = 720, targetH = 960;
+        const targetW = 1080, targetH = 1440;
         const off = document.createElement("canvas");
         off.width = targetW;
         off.height = targetH;

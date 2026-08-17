@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getLayout } from "../layouts";
+import { getLayout, getSlotAspect  } from "../layouts";
 
 type CameraStatus = "idle" | "requesting" | "ready" | "denied" | "no-camera" | "error";
 
@@ -191,6 +191,7 @@ function BoothContent() {
   const layoutParam = searchParams.get("layout") ??
     (typeof window !== "undefined" ? sessionStorage.getItem("pickaboo-selected-layout") : null);
   const layout = getLayout(layoutParam);
+  const slotAspect = getSlotAspect(layout);
 
   const filterParam = searchParams.get("filter");
   const retakeParam = searchParams.get("retake");
@@ -228,11 +229,7 @@ function BoothContent() {
 
   const totalShots = retakeIndex !== null ? 1 : layout.poses;
 
-  useEffect(() => {
-    navigator.mediaDevices?.enumerateDevices()
-      .then((devices) => setHasMultipleCameras(devices.filter((d) => d.kind === "videoinput").length > 1))
-      .catch(() => {});
-  }, []);
+  
 
   useEffect(() => {
     let cancelled = false;
@@ -252,6 +249,9 @@ function BoothContent() {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
         setStatus("ready");
+        navigator.mediaDevices.enumerateDevices()
+          .then((devices) => setHasMultipleCameras(devices.filter((d) => d.kind === "videoinput").length > 1))
+          .catch(() => {});
       } catch (err: any) {
         if (cancelled) return;
         if (err?.name === "NotAllowedError") setStatus("denied");
@@ -551,111 +551,176 @@ function BoothContent() {
   }, [layout.themeOverlay, status]);
 
   function capturePhoto(): string | null {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return null;
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
 
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    if (!vw || !vh) return null;
+  if (!video || !canvas) return null;
 
-    // Fixed high-resolution 3:4 output — matches exactly what the live
-    // preview shows (object-cover center-crop), so nothing needs to be
-    // re-cropped later when placed into the strip.
-    const OUTPUT_W = 1080;
-    const OUTPUT_H = 1440;
-    const targetRatio = OUTPUT_W / OUTPUT_H;
-    const srcRatio = vw / vh;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
 
-    let sx = 0, sy = 0, sw = vw, sh = vh;
-    if (srcRatio > targetRatio) {
-      sw = vh * targetRatio;
-      sx = (vw - sw) / 2;
-    } else {
-      sh = vw / targetRatio;
-      sy = (vh - sh) / 2;
-    }
-    const scale = OUTPUT_W / sw;
+  if (!vw || !vh) return null;
 
-    canvas.width = OUTPUT_W;
-    canvas.height = OUTPUT_H;
+  // Capture the COMPLETE camera frame.
+  // Do NOT crop it to the layout/strip aspect ratio here.
+  const OUTPUT_W = vw;
+  const OUTPUT_H = vh;
 
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return null;
+  canvas.width = OUTPUT_W;
+  canvas.height = OUTPUT_H;
 
-    ctx.save();
-    if (facingMode === "user") { ctx.translate(OUTPUT_W, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, OUTPUT_W, OUTPUT_H);
-    ctx.restore();
+  const ctx = canvas.getContext("2d", {
+    willReadFrequently: true,
+  });
 
-    if (selectedFilter.ops.length > 0) {
-      const imageData = ctx.getImageData(0, 0, OUTPUT_W, OUTPUT_H);
-      applyFilterOps(imageData, selectedFilter.ops);
-      ctx.putImageData(imageData, 0, 0);
-    }
+  if (!ctx) return null;
 
-    if (
-      layout.themeOverlay === "hearts" &&
-      crownCurrentRef.current &&
-      (useNativeAppleEmojiRef.current ||
-        (heartImgRef.current?.complete && heartImgRef.current?.naturalWidth))
-    ) {
-      const c = crownCurrentRef.current;
+  ctx.save();
 
-      // The tracked face position was measured in raw video pixel space —
-      // map it into our new cropped/scaled output space first.
-      const outCx = (c.cx - sx) * scale;
-      const outAnchorY = (c.anchorY - sy) * scale;
-      const outHeadW = c.headWidth * scale;
+  // Preserve the existing selfie-camera mirror.
+  if (facingMode === "user") {
+    ctx.translate(OUTPUT_W, 0);
+    ctx.scale(-1, 1);
+  }
 
-      const mirrorX = (x: number) =>
-        facingMode === "user" ? OUTPUT_W - x : x;
+  // Draw the complete camera frame.
+  ctx.drawImage(
+    video,
+    0,
+    0,
+    vw,
+    vh,
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
 
-      const headW = outHeadW;
-      const heartW = Math.max(30, Math.min(150, headW * 0.235));
-      const now = performance.now() / 1000;
+  ctx.restore();
 
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.imageSmoothingEnabled = true;
+  // Apply the selected filter after capturing the complete frame.
+  if (selectedFilter.ops.length > 0) {
+    const imageData = ctx.getImageData(
+      0,
+      0,
+      OUTPUT_W,
+      OUTPUT_H
+    );
 
-      for (const item of CROWN_OFFSETS) {
-        const independentY =
-          Math.sin(now * item.speed + item.phase) *
-          item.amp *
-          headW;
+    applyFilterOps(imageData, selectedFilter.ops);
 
-        const rawX = outCx + item.dx * headW;
-        const x = mirrorX(rawX);
-        const y = outAnchorY + item.dy * headW + independentY;
-        const w = heartW * item.scale;
+    ctx.putImageData(imageData, 0, 0);
+  }
 
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(
-          (c.roll +
-            (facingMode === "user" ? -item.rotate : item.rotate)) *
-            Math.PI /
-            180
+  // Draw the heart crown using the COMPLETE captured frame.
+  if (
+    layout.themeOverlay === "hearts" &&
+    crownCurrentRef.current &&
+    (
+      useNativeAppleEmojiRef.current ||
+      (
+        heartImgRef.current?.complete &&
+        heartImgRef.current?.naturalWidth
+      )
+    )
+  ) {
+    const c = crownCurrentRef.current;
+
+    // Because we are no longer cropping the source image,
+    // camera coordinates map directly into the output.
+    const scale = OUTPUT_W / vw;
+
+    const outCx = c.cx * scale;
+    const outAnchorY = c.anchorY * scale;
+    const outHeadW = c.headWidth * scale;
+
+    const mirrorX = (x: number) =>
+      facingMode === "user"
+        ? OUTPUT_W - x
+        : x;
+
+    const headW = outHeadW;
+    const heartW = Math.max(
+      30,
+      Math.min(150, headW * 0.235)
+    );
+
+    const now = performance.now() / 1000;
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.imageSmoothingEnabled = true;
+
+    for (const item of CROWN_OFFSETS) {
+      const independentY =
+        Math.sin(
+          now * item.speed + item.phase
+        ) *
+        item.amp *
+        headW;
+
+      const rawX =
+        outCx + item.dx * headW;
+
+      const x = mirrorX(rawX);
+
+      const y =
+        outAnchorY +
+        item.dy * headW +
+        independentY;
+
+      const w =
+        heartW * item.scale;
+
+      ctx.save();
+
+      ctx.translate(x, y);
+
+      ctx.rotate(
+        (
+          c.roll +
+          (
+            facingMode === "user"
+              ? -item.rotate
+              : item.rotate
+          )
+        ) *
+        Math.PI /
+        180
+      );
+
+      ctx.globalAlpha = item.opacity;
+
+      if (useNativeAppleEmojiRef.current) {
+        ctx.font = `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
+        ctx.fillText(
+          HEART_EMOJI,
+          0,
+          0
         );
-        ctx.globalAlpha = item.opacity;
+      } else if (heartImgRef.current) {
+        const h = w * 1.02;
 
-        if (useNativeAppleEmojiRef.current) {
-          ctx.font = `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
-          ctx.fillText(HEART_EMOJI, 0, 0);
-        } else if (heartImgRef.current) {
-          const h = w * 1.02;
-          ctx.drawImage(heartImgRef.current, -w / 2, -h / 2, w, h);
-        }
-
-        ctx.restore();
+        ctx.drawImage(
+          heartImgRef.current,
+          -w / 2,
+          -h / 2,
+          w,
+          h
+        );
       }
 
-      ctx.globalAlpha = 1;
+      ctx.restore();
     }
 
-    return canvas.toDataURL("image/jpeg", 0.95);
+    ctx.globalAlpha = 1;
   }
+
+  return canvas.toDataURL(
+    "image/jpeg",
+    0.95
+  );
+}
 
   function finishAndProceed(newCaptures: string[]) {
     if (retakeIndex !== null) {
@@ -700,40 +765,79 @@ function BoothContent() {
   }
 
   function processFileToPhoto(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const targetW = 1080, targetH = 1440;
-        const off = document.createElement("canvas");
-        off.width = targetW;
-        off.height = targetH;
-        const ctx = off.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return reject(new Error("no ctx"));
+  return new Promise((resolve, reject) => {
+    const img = new Image();
 
-        const srcRatio = img.width / img.height;
-        const targetRatio = targetW / targetH;
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
-        if (srcRatio > targetRatio) {
-          sw = img.height * targetRatio;
-          sx = (img.width - sw) / 2;
-        } else {
-          sh = img.width / targetRatio;
-          sy = (img.height - sh) / 2;
-        }
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
+    img.onload = () => {
+      const OUTPUT_W = img.width;
+      const OUTPUT_H = img.height;
 
-        if (selectedFilter.ops.length > 0) {
-          const imageData = ctx.getImageData(0, 0, targetW, targetH);
-          applyFilterOps(imageData, selectedFilter.ops);
-          ctx.putImageData(imageData, 0, 0);
-        }
-        resolve(off.toDataURL("image/jpeg", 0.92));
-        URL.revokeObjectURL(img.src);
-      };
-      img.onerror = () => reject(new Error("image load failed"));
-      img.src = URL.createObjectURL(file);
-    });
-  }
+      const off = document.createElement("canvas");
+
+      off.width = OUTPUT_W;
+      off.height = OUTPUT_H;
+
+      const ctx = off.getContext("2d", {
+        willReadFrequently: true,
+      });
+
+      if (!ctx) {
+        reject(new Error("no ctx"));
+        return;
+      }
+
+      // Keep the COMPLETE uploaded image.
+      ctx.drawImage(
+        img,
+        0,
+        0,
+        img.width,
+        img.height,
+        0,
+        0,
+        OUTPUT_W,
+        OUTPUT_H
+      );
+
+      if (selectedFilter.ops.length > 0) {
+        const imageData = ctx.getImageData(
+          0,
+          0,
+          OUTPUT_W,
+          OUTPUT_H
+        );
+
+        applyFilterOps(
+          imageData,
+          selectedFilter.ops
+        );
+
+        ctx.putImageData(
+          imageData,
+          0,
+          0
+        );
+      }
+
+      resolve(
+        off.toDataURL(
+          "image/jpeg",
+          0.92
+        )
+      );
+
+      URL.revokeObjectURL(img.src);
+    };
+
+    img.onerror = () =>
+      reject(
+        new Error("image load failed")
+      );
+
+    img.src =
+      URL.createObjectURL(file);
+  });
+}
 
   async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -814,7 +918,8 @@ function BoothContent() {
 
         <div className="relative flex w-full items-center justify-center lg:w-auto">
         <div
-          className="relative aspect-[3/4] h-[min(54dvh,105vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
+          style={{ aspectRatio: slotAspect }}
+          className="relative h-[min(54dvh,105vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
         >
           <video
             ref={videoRef}

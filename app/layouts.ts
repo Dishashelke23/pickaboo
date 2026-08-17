@@ -30,3 +30,16 @@ export const LAYOUTS: LayoutOption[] = [
 export function getLayout(id: string | null): LayoutOption {
   return LAYOUTS.find((l) => l.id === id) ?? LAYOUTS[0];
 }
+
+export function getSlotAspect(layout: LayoutOption): number {
+  if (layout.cols === 1) return 3 / 4;
+
+  const footerSpace =
+    layout.footerSize === "normal" ? 8 : layout.footerSize === "small" ? 6 : 0;
+  const usableW = 100 - layout.padding * 2 - layout.gap * (layout.cols - 1);
+  const usableH = 100 - layout.padding * 2 - footerSpace - layout.gap * (layout.rows - 1);
+  const cellWpct = usableW / layout.cols;
+  const cellHpct = usableH / layout.rows;
+  return (cellWpct * layout.aspectValue) / cellHpct;
+}
+

@@ -10,13 +10,13 @@ type StickerEl = { id: string; kind: "sticker"; stickerId: string; xPct: number;
 type TextEl = { id: string; kind: "text"; text: string; xPct: number; yPct: number; size: number; color: string; fontId: string };
 type CanvasEl = StickerEl | TextEl;
 type BgChoice = { backgroundColor?: string; backgroundImage?: string; backgroundSize?: string; dark: boolean };
-type FrameStyle = { id: string; label: string; outerRadius: number; photoRadius: number; photoBorder: boolean };
+type FrameStyle = { id: string; label: string; photoRadius: number; photoBorder: boolean };
 
 const FRAME_STYLES: FrameStyle[] = [
-  { id: "sharp", label: "Sharp", outerRadius: 4, photoRadius: 0, photoBorder: false },
-  { id: "rounded", label: "Rounded", outerRadius: 24, photoRadius: 8, photoBorder: false },
-  { id: "soft", label: "Soft", outerRadius: 36, photoRadius: 16, photoBorder: false },
-  { id: "film", label: "Film Edge", outerRadius: 4, photoRadius: 0, photoBorder: true },
+  { id: "sharp", label: "Sharp", photoRadius: 0, photoBorder: false },
+  { id: "rounded", label: "Rounded", photoRadius: 10, photoBorder: false },
+  { id: "soft", label: "Soft", photoRadius: 20, photoBorder: false },
+  { id: "film", label: "Film Edge", photoRadius: 0, photoBorder: true },
 ];
 
 const SOLIDS = [
@@ -127,41 +127,78 @@ const FONT_OPTIONS = [
 ];
 
 function buildLayoutSlots(layout: LayoutOption, count: number): Slot[] {
-  const gap = layout.gap;
-  const padding = layout.padding;
-  const footerSpace = layout.footerSize === "normal" ? 8 : layout.footerSize === "small" ? 6 : 0;
-  const cols = layout.cols;
-  const rows = layout.rows;
+  // Pickaboo's vertical photo-strip photos are landscape.
+  // This matches the original strip appearance.
+  const photoAspect = 1.65;
 
+  const { padding, gap, cols, rows } = layout;
+
+  const footerSpace =
+    layout.footerSize === "normal"
+      ? 8
+      : layout.footerSize === "small"
+      ? 6
+      : 0;
+
+  // Vertical photo-strip layouts
   if (cols === 1) {
-    const wPct = 100 - padding * 2;
-    const photoAspect = 3 / 4; // matches capturePhoto's fixed 3:4 output
-    const idealCellH = (wPct * layout.aspectValue) / photoAspect;
-    const usableH = 100 - padding * 2 - footerSpace - gap * (count - 1);
-    const maxCellH = usableH / count;
-    const cellH = Math.min(idealCellH, maxCellH);
-    const totalUsed = cellH * count + gap * (count - 1);
-    const startY = padding + Math.max(0, (usableH - totalUsed) / 2);
+    const availableWidth = 100 - padding * 2;
+
+    // Convert the photo's real aspect ratio into a percentage
+    // of the strip height.
+    const photoHeight =
+      (availableWidth * layout.aspectValue) / photoAspect;
+
+    const totalPhotosHeight = photoHeight * count;
+    const totalGaps = gap * (count - 1);
+
+    const usableHeight =
+      100 -
+      padding * 2 -
+      footerSpace;
+
+    const totalUsedHeight =
+      totalPhotosHeight + totalGaps;
+
+    // Center the complete photo stack vertically inside
+    // the available area, just like the original strip.
+    const extraSpace =
+      Math.max(0, usableHeight - totalUsedHeight);
+
+    const startY =
+      padding + extraSpace / 2;
+
     return Array.from({ length: count }, (_, i) => ({
       xPct: padding,
-      yPct: startY + i * (cellH + gap),
-      wPct,
-      hPct: cellH,
+      yPct: startY + i * (photoHeight + gap),
+      wPct: availableWidth,
+      hPct: photoHeight,
     }));
   }
 
-  const usableW = 100 - padding * 2 - gap * (cols - 1);
-  const usableH = 100 - padding * 2 - footerSpace - gap * (rows - 1);
-  const cellW = usableW / cols;
-  const cellH = usableH / rows;
+  // Grid / non-strip layouts
+  const cellWidth =
+    (100 - padding * 2 - gap * (cols - 1)) / cols;
+
+  const cellHeight =
+    (100 -
+      padding * 2 -
+      footerSpace -
+      gap * (rows - 1)) /
+    rows;
 
   return Array.from({ length: count }, (_, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    return { xPct: padding + col * (cellW + gap), yPct: padding + row * (cellH + gap), wPct: cellW, hPct: cellH };
+
+    return {
+      xPct: padding + col * (cellWidth + gap),
+      yPct: padding + row * (cellHeight + gap),
+      wPct: cellWidth,
+      hPct: cellHeight,
+    };
   });
 }
-
 function getIsDark(hex: string): boolean {
   const clean = hex.replace("#", "");
   if (clean.length !== 6) return false;
@@ -213,7 +250,7 @@ export default function CustomizePage() {
   const [captures, setCaptures] = useState<string[]>([]);
   const [layout, setLayout] = useState<LayoutOption>(LAYOUTS[0]);
   const [background, setBackground] = useState<BgChoice>({ backgroundColor: SOLIDS[0].backgroundColor, dark: SOLIDS[0].dark });
-  const [frameStyle, setFrameStyle] = useState<FrameStyle>(FRAME_STYLES[1]);
+  const [frameStyle, setFrameStyle] = useState<FrameStyle>(FRAME_STYLES[0]);
 
   const [elements, setElements] = useState<CanvasEl[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -247,7 +284,6 @@ export default function CustomizePage() {
   const canvasHeight = isDesktop
     ? `min(66vh, calc((100vw - 460px) / ${layout.aspectValue}))`
     : `min(46vh, calc((100vw - 48px) / ${layout.aspectValue}))`;
-
   function addSticker(stickerId: string) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setElements((prev) => [...prev, { id, kind: "sticker", stickerId, xPct: 50, yPct: 50, size: 44 }]);
@@ -305,9 +341,7 @@ export default function CustomizePage() {
     setIsExporting(true);
     await new Promise((r) => setTimeout(r, 60));
     try {
-      const EXPORT_SCALE = 3;
-      const rawRendered = await html2canvas(canvasRef.current, { backgroundColor: null, scale: EXPORT_SCALE, useCORS: true });
-      const rendered = roundCanvasCorners(rawRendered, frameStyle.outerRadius * EXPORT_SCALE);
+      const rendered = await html2canvas(canvasRef.current, { backgroundColor: null, scale: 3, useCORS: true });
       if (isIOSDevice()) {
         setPreviewImage(rendered.toDataURL("image/png"));
       } else {
@@ -392,7 +426,6 @@ export default function CustomizePage() {
           style={{
             height: canvasHeight,
             aspectRatio: layout.aspect,
-            borderRadius: frameStyle.outerRadius,
             containerType: "inline-size",
             backgroundColor: background.backgroundColor ?? "transparent",
             backgroundImage: background.backgroundImage ?? "none",
@@ -401,15 +434,29 @@ export default function CustomizePage() {
           }}
         >
           {slots.map((slot, i) => (
-            <img
-              key={i}
-              src={captures[i]}
-              alt={`Shot ${i + 1}`}
-              draggable={false}
-              className={`absolute object-cover shadow-sm ${frameStyle.photoBorder ? "ring-1 ring-ink/15" : ""}`}
-              style={{ left: `${slot.xPct}%`, top: `${slot.yPct}%`, width: `${slot.wPct}%`, height: `${slot.hPct}%`, borderRadius: frameStyle.photoRadius }}
-            />
-          ))}
+  <div
+    key={i}
+    className="absolute overflow-hidden"
+    style={{
+      left: `${slot.xPct}%`,
+      top: `${slot.yPct}%`,
+      width: `${slot.wPct}%`,
+      height: `${slot.hPct}%`,
+    }}
+  >
+    <img
+      src={captures[i]}
+      alt={`Shot ${i + 1}`}
+      draggable={false}
+      className={`h-full w-full object-cover ${
+  frameStyle.photoBorder ? "ring-1 ring-ink/15" : ""
+}`}
+      style={{
+        borderRadius: frameStyle.photoRadius,
+      }}
+    />
+  </div>
+))}
 
           {layout.footerSize !== "none" && (
             <p

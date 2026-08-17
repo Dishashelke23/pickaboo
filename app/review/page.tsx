@@ -1,5 +1,6 @@
 "use client";
 
+import { getLayout, getSlotAspect } from "../layouts";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -51,7 +52,8 @@ export default function ReviewPage() {
             <img
               src={src}
               alt={`Shot ${i + 1}`}
-              className="aspect-[3/4] w-full object-cover"
+              style={{ aspectRatio: getSlotAspect(getLayout(layoutId)) }}
+              className="w-full object-cover"
             />
             <span className="absolute bottom-2 left-2 rounded-full bg-ink/60 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-paper">
               {i + 1}

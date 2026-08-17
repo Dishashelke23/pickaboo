@@ -69,58 +69,141 @@ function getCrownTarget(result: any): CrownTarget | null {
 
   const box = result.box;
   const landmarks = result.landmarks;
+
+  // Default fallback: face-box center.
   let cx = box.x + box.width / 2;
-  let browY = box.y + box.height * 0.30;
-
-  // 68-point landmarks give us a much better "hairline" proxy than the
-  // top edge of the face detector box. Eyebrows are points 17..26.
-  if (landmarks?.positions?.length >= 27) {
-    const brows = landmarks.positions.slice(17, 27);
-    if (brows.length) {
-  const landmarkCx =
-    brows.reduce((sum: number, p: any) => sum + p.x, 0) / brows.length;
-
-  const landmarkY =
-    Math.min(...brows.map((p: any) => p.y));
-
-  // Blend landmarks with the detector box.
-  // This keeps tracking stable during strong head tilts.
-  cx = lerp(
-    box.x + box.width / 2,
-    landmarkCx,
-    0.65
-  );
-
-  browY = lerp(
-    box.y + box.height * 0.30,
-    landmarkY,
-    0.65
-  );
-}
-  }
-
-  // Move above the eyebrows into the hair/crown area.
-  const anchorY = browY - box.height * 0.48;
+  let cy = box.y + box.height * 0.30;
 
   let roll = 0;
+
   if (landmarks?.positions?.length >= 48) {
-    const leftEye = landmarks.positions.slice(36, 42);
-    const rightEye = landmarks.positions.slice(42, 48);
-    if (leftEye.length && rightEye.length) {
-      const lx = leftEye.reduce((s: number, p: any) => s + p.x, 0) / leftEye.length;
-      const ly = leftEye.reduce((s: number, p: any) => s + p.y, 0) / leftEye.length;
-      const rx = rightEye.reduce((s: number, p: any) => s + p.x, 0) / rightEye.length;
-      const ry = rightEye.reduce((s: number, p: any) => s + p.y, 0) / rightEye.length;
-      roll = Math.atan2(ry - ly, rx - lx);
+    const points = landmarks.positions;
+
+    // --------------------------------------------------
+    // 1. Find the center of both eyes.
+    // --------------------------------------------------
+
+    const leftEye = points.slice(36, 42);
+    const rightEye = points.slice(42, 48);
+
+    const lx =
+      leftEye.reduce(
+        (sum: number, p: any) => sum + p.x,
+        0
+      ) / leftEye.length;
+
+    const ly =
+      leftEye.reduce(
+        (sum: number, p: any) => sum + p.y,
+        0
+      ) / leftEye.length;
+
+    const rx =
+      rightEye.reduce(
+        (sum: number, p: any) => sum + p.x,
+        0
+      ) / rightEye.length;
+
+    const ry =
+      rightEye.reduce(
+        (sum: number, p: any) => sum + p.y,
+        0
+      ) / rightEye.length;
+
+    cx = (lx + rx) / 2;
+    cy = (ly + ry) / 2;
+
+    // --------------------------------------------------
+    // 2. Eye-line angle.
+    //
+    // This controls the rotation of the heart crown.
+    // --------------------------------------------------
+
+    roll = Math.atan2(
+      ry - ly,
+      rx - lx
+    );
+
+    // --------------------------------------------------
+    // 3. Find the nose.
+    //
+    // Face-api landmark #30 is the nose tip.
+    // The direction from the eyes -> nose is the
+    // "down" direction of the person's face.
+    //
+    // Therefore the opposite direction is ALWAYS
+    // the actual "top of the head".
+    //
+    // This is what makes landscape work.
+    // --------------------------------------------------
+
+    const nose = points[30];
+
+    let upX = Math.sin(roll);
+    let upY = -Math.cos(roll);
+
+    if (nose) {
+      const faceDownX = nose.x - cx;
+      const faceDownY = nose.y - cy;
+
+      const length = Math.sqrt(
+        faceDownX * faceDownX +
+        faceDownY * faceDownY
+      );
+
+      if (length > 0.001) {
+        // Reverse the eye -> nose direction.
+        upX = -faceDownX / length;
+        upY = -faceDownY / length;
+      }
     }
+
+    // --------------------------------------------------
+    // 4. Move from the eyes toward the actual top
+    //    of the head.
+    // --------------------------------------------------
+
+    const headSize = Math.max(
+      box.width,
+      box.height
+    );
+
+    const crownDistance =
+      headSize * 0.52;
+
+    const anchorX =
+      cx + upX * crownDistance;
+
+    const anchorY =
+      cy + upY * crownDistance;
+
+    return {
+      cx: anchorX,
+      anchorY,
+      headWidth: headSize,
+      headHeight: headSize,
+      roll,
+    };
   }
+
+  // --------------------------------------------------
+  // Fallback if landmarks aren't available.
+  // --------------------------------------------------
 
   return {
     cx,
-    anchorY,
-    headWidth: box.width,
-    headHeight: box.height,
-    roll,
+    anchorY:
+      box.y -
+      box.height * 0.10,
+    headWidth: Math.max(
+      box.width,
+      box.height
+    ),
+    headHeight: Math.max(
+      box.width,
+      box.height
+    ),
+    roll: 0,
   };
 }
 
@@ -342,12 +425,12 @@ function BoothContent() {
         // FIRST: reliable face-box detection.
         // This alone is enough to show the crown.
         const detection = await faceapi.detectSingleFace(
-          videoRef.current,
-          new faceapi.TinyFaceDetectorOptions({
-            inputSize: 224,
-            scoreThreshold: 0.15,
-          })
-        );
+  videoRef.current,
+  new faceapi.TinyFaceDetectorOptions({
+    inputSize: 320,
+    scoreThreshold: 0.08,
+  })
+);
 
         if (cancelled) return;
 
@@ -387,9 +470,11 @@ function BoothContent() {
         } else {
   crownMissesRef.current += 1;
 
-  if (crownMissesRef.current > 45) {
-    crownVisibleRef.current = false;
-  }
+  if (crownMissesRef.current > 8) {
+  crownVisibleRef.current = false;
+  crownTargetRef.current = null;
+  crownCurrentRef.current = null;
+}
 }
       } catch (error) {
         console.warn("Heart tracking frame failed:", error);
@@ -483,54 +568,141 @@ function BoothContent() {
             // Convert intrinsic camera coordinates to the visible CSS
             // rectangle using the exact same object-cover crop as <video>.
             const vw = video.videoWidth;
-            const vh = video.videoHeight;
-            const scale = Math.max(rect.width / vw, rect.height / vh);
-            const renderedW = vw * scale;
-            const renderedH = vh * scale;
-            const cropX = (renderedW - rect.width) / 2;
-            const cropY = (renderedH - rect.height) / 2;
+const vh = video.videoHeight;
 
-            const centerX = c.cx * scale - cropX;
-            const anchorY = c.anchorY * scale - cropY;
-            const headW = c.headWidth * scale;
+// -------------------------------------------------------
+// Map face-api coordinates -> visible video coordinates.
+// This matches the video's CSS object-cover behavior.
+// -------------------------------------------------------
+
+const videoAspect = vw / vh;
+const displayAspect = rect.width / rect.height;
+
+// object-cover scale
+const scale =
+  displayAspect > videoAspect
+    ? rect.width / vw
+    : rect.height / vh;
+
+const renderedW = vw * scale;
+const renderedH = vh * scale;
+
+// Amount cropped from each side by object-cover
+const cropX = (renderedW - rect.width) / 2;
+const cropY = (renderedH - rect.height) / 2;
+
+// Face position in displayed coordinates
+let centerX = c.cx * scale - cropX;
+const anchorY = c.anchorY * scale - cropY;
+const headW = c.headWidth * scale;
+
+// The <video> is mirrored for the front camera.
+// We mirror the coordinates here instead of relying on
+// the canvas CSS transform.
+if (facingMode === "user") {
+  centerX = rect.width - centerX;
+}
 
             // The reference has individual hearts drifting independently.
             // They do NOT move as one group: some rise while others fall.
-            const heartW = Math.max(24, Math.min(94, headW * 0.220));
-            const now = performance.now() / 1000;
+            const heartW = Math.max(
+  24,
+  Math.min(94, headW * 0.220)
+);
 
-            ctx.globalCompositeOperation = "source-over";
-            ctx.imageSmoothingEnabled = true;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
+const now =
+  performance.now() / 1000;
 
-            for (const item of CROWN_OFFSETS) {
-              const independentY =
-                Math.sin(now * item.speed + item.phase) *
-                item.amp *
-                headW;
+// Calculate the crown rotation ONCE,
+// before drawing the individual hearts.
+const roll =
+  facingMode === "user"
+    ? -c.roll
+    : c.roll;
 
-              const x = centerX + item.dx * headW;
-              const y = anchorY + item.dy * headW + independentY;
-              const w = heartW * item.scale;
+ctx.globalCompositeOperation =
+  "source-over";
 
-              ctx.save();
-              ctx.translate(x, y);
-              ctx.rotate(c.roll + (item.rotate * Math.PI) / 180);
-              ctx.globalAlpha = item.opacity;
+ctx.imageSmoothingEnabled = true;
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
 
-              if (useNativeAppleEmojiRef.current) {
-                ctx.font = `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
-                ctx.fillText(HEART_EMOJI, 0, 0);
-              } else if (heart) {
-                const h = w * 1.02;
-                ctx.drawImage(heart, -w / 2, -h / 2, w, h);
-              }
+for (const item of CROWN_OFFSETS) {
+  const independentY =
+    Math.sin(
+      now * item.speed +
+      item.phase
+    ) *
+    item.amp *
+    headW;
 
-              ctx.restore();
-            }
+  // Convert the small floating animation into the
+  // person's local coordinate system.
+  const localDX = item.dx;
 
-            ctx.globalAlpha = 1;
+  const localDY =
+    item.dy +
+    independentY / headW;
+
+  // Rotate the crown with the face.
+  const rotatedDX =
+    localDX * Math.cos(roll) -
+    localDY * Math.sin(roll);
+
+  const rotatedDY =
+    localDX * Math.sin(roll) +
+    localDY * Math.cos(roll);
+
+  const x =
+    centerX +
+    rotatedDX * headW;
+
+  const y =
+    anchorY +
+    rotatedDY * headW;
+
+  const w =
+    heartW * item.scale;
+
+  ctx.save();
+
+  ctx.translate(x, y);
+
+  ctx.rotate(
+    roll +
+    (item.rotate * Math.PI) / 180
+  );
+
+  ctx.globalAlpha =
+    item.opacity;
+
+  if (
+    useNativeAppleEmojiRef.current
+  ) {
+    ctx.font =
+      `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
+
+    ctx.fillText(
+      HEART_EMOJI,
+      0,
+      0
+    );
+  } else if (heart) {
+    const h = w * 1.02;
+
+    ctx.drawImage(
+      heart,
+      -w / 2,
+      -h / 2,
+      w,
+      h
+    );
+  }
+
+  ctx.restore();
+}
+
+ctx.globalAlpha = 1;
           }
         }
       }
@@ -652,68 +824,87 @@ function BoothContent() {
     ctx.imageSmoothingEnabled = true;
 
     for (const item of CROWN_OFFSETS) {
-      const independentY =
-        Math.sin(
-          now * item.speed + item.phase
-        ) *
-        item.amp *
-        headW;
+  const independentY =
+    Math.sin(
+      now * item.speed +
+      item.phase
+    ) *
+    item.amp *
+    headW;
 
-      const rawX =
-        outCx + item.dx * headW;
+  const localDX =
+    item.dx;
 
-      const x = mirrorX(rawX);
+  const localDY =
+    item.dy +
+    independentY / headW;
 
-      const y =
-        outAnchorY +
-        item.dy * headW +
-        independentY;
+  const displayRoll =
+    facingMode === "user"
+      ? -c.roll
+      : c.roll;
 
-      const w =
-        heartW * item.scale;
+  const rotatedDX =
+    localDX * Math.cos(displayRoll) -
+    localDY * Math.sin(displayRoll);
 
-      ctx.save();
+  const rotatedDY =
+    localDX * Math.sin(displayRoll) +
+    localDY * Math.cos(displayRoll);
 
-      ctx.translate(x, y);
+  const rawX =
+    outCx +
+    rotatedDX * headW;
 
-      ctx.rotate(
-        (
-          c.roll +
-          (
-            facingMode === "user"
-              ? -item.rotate
-              : item.rotate
-          )
-        ) *
-        Math.PI /
-        180
-      );
+  const x =
+    mirrorX(rawX);
 
-      ctx.globalAlpha = item.opacity;
+  const y =
+    outAnchorY +
+    rotatedDY * headW;
 
-      if (useNativeAppleEmojiRef.current) {
-        ctx.font = `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
-        ctx.fillText(
-          HEART_EMOJI,
-          0,
-          0
-        );
-      } else if (heartImgRef.current) {
-        const h = w * 1.02;
+  const w =
+    heartW * item.scale;
 
-        ctx.drawImage(
-          heartImgRef.current,
-          -w / 2,
-          -h / 2,
-          w,
-          h
-        );
-      }
+  ctx.save();
 
-      ctx.restore();
-    }
+  ctx.translate(x, y);
 
-    ctx.globalAlpha = 1;
+  ctx.rotate(
+    displayRoll +
+    (item.rotate * Math.PI) / 180
+  );
+
+  ctx.globalAlpha =
+    item.opacity;
+
+  if (
+    useNativeAppleEmojiRef.current
+  ) {
+    ctx.font =
+      `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
+
+    ctx.fillText(
+      HEART_EMOJI,
+      0,
+      0
+    );
+  } else if (heartImgRef.current) {
+    const h = w * 1.02;
+
+    ctx.drawImage(
+      heartImgRef.current,
+      -w / 2,
+      -h / 2,
+      w,
+      h
+    );
+  }
+
+  ctx.restore();
+}
+
+ctx.globalAlpha = 1;
   }
 
   return canvas.toDataURL(
@@ -763,6 +954,160 @@ function BoothContent() {
   function handleUploadClick() {
     fileInputRef.current?.click();
   }
+
+  async function drawHeartCrownOnImage(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  outputWidth: number,
+  outputHeight: number
+) {
+  if (
+    layout.themeOverlay !== "hearts" ||
+    !faceapiRef.current
+  ) {
+    return;
+  }
+
+  const faceapi = faceapiRef.current;
+
+  try {
+    const detection = await faceapi
+      .detectSingleFace(
+        image,
+        new faceapi.TinyFaceDetectorOptions({
+          inputSize: 320,
+          scoreThreshold: 0.08,
+        })
+      );
+
+    if (!detection) {
+      console.log("Heart filter: no face detected in uploaded photo.");
+      return;
+    }
+
+    let target: CrownTarget = {
+      cx:
+        detection.box.x +
+        detection.box.width / 2,
+
+      anchorY:
+        detection.box.y -
+        detection.box.height * 0.08,
+
+      headWidth: detection.box.width,
+      headHeight: detection.box.height,
+      roll: 0,
+    };
+
+    try {
+      const landmarkResult =
+        await detection.withFaceLandmarks();
+
+      if (landmarkResult) {
+        const landmarkTarget =
+          getCrownTarget(landmarkResult);
+
+        if (landmarkTarget) {
+          target = landmarkTarget;
+        }
+      }
+    } catch {
+      // Face box is still usable without landmarks.
+    }
+
+    // The detection coordinates are based on the original image.
+    // Scale them to the canvas we are actually exporting.
+    const scaleX =
+      outputWidth / image.naturalWidth;
+
+    const scaleY =
+      outputHeight / image.naturalHeight;
+
+    const centerX =
+      target.cx * scaleX;
+
+    const anchorY =
+      target.anchorY * scaleY;
+
+    const headW =
+      target.headWidth * scaleX;
+
+    const heartW = Math.max(
+      30,
+      Math.min(150, headW * 0.235)
+    );
+
+    const now =
+      performance.now() / 1000;
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.imageSmoothingEnabled = true;
+
+    for (const item of CROWN_OFFSETS) {
+      const independentY =
+        Math.sin(
+          now * item.speed +
+          item.phase
+        ) *
+        item.amp *
+        headW;
+
+      const x =
+        centerX +
+        item.dx * headW;
+
+      const y =
+        anchorY +
+        item.dy * headW +
+        independentY;
+
+      const w =
+        heartW * item.scale;
+
+      ctx.save();
+
+      ctx.translate(x, y);
+
+      ctx.rotate(
+        (
+          target.roll +
+          item.rotate
+        ) *
+        Math.PI /
+        180
+      );
+
+      ctx.globalAlpha =
+        item.opacity;
+
+      if (
+        heartImgRef.current &&
+        heartImgRef.current.complete &&
+        heartImgRef.current.naturalWidth
+      ) {
+        const h = w * 1.02;
+
+        ctx.drawImage(
+          heartImgRef.current,
+          -w / 2,
+          -h / 2,
+          w,
+          h
+        );
+      }
+
+      ctx.restore();
+    }
+
+    ctx.globalAlpha = 1;
+  } catch (error) {
+    console.warn(
+      "Heart filter failed on uploaded photo:",
+      error
+    );
+  }
+}
 
   function processFileToPhoto(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -934,7 +1279,7 @@ function BoothContent() {
             <canvas
               ref={overlayCanvasRef}
               aria-hidden="true"
-              className={`pointer-events-none absolute inset-0 z-20 h-full w-full ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
+              className="pointer-events-none absolute inset-0 z-20 h-full w-full"
             />
           )}
 

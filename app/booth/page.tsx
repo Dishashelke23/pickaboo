@@ -274,7 +274,12 @@ function BoothContent() {
   const layoutParam = searchParams.get("layout") ??
     (typeof window !== "undefined" ? sessionStorage.getItem("pickaboo-selected-layout") : null);
   const layout = getLayout(layoutParam);
-  const slotAspect = getSlotAspect(layout);
+const slotAspect = getSlotAspect(layout);
+
+// Camera viewport is intentionally independent of the final strip.
+// This is the same camera/capture behavior used by the working
+// Grid/Duo flow.
+const CAMERA_ASPECT = 4 / 3;
 
   const filterParam = searchParams.get("filter");
   const retakeParam = searchParams.get("retake");
@@ -733,35 +738,69 @@ ctx.globalAlpha = 1;
 
   if (!vw || !vh) return null;
 
-  // Capture the COMPLETE camera frame.
-  // Do NOT crop it to the layout/strip aspect ratio here.
-  const OUTPUT_W = vw;
-  const OUTPUT_H = vh;
+  // ---------------------------------------------------------
+  // The camera preview is ALWAYS 4:3.
+  // Capture exactly that same 4:3 area.
+  // ---------------------------------------------------------
+
+  const targetAspect = CAMERA_ASPECT;
+  const sourceAspect = vw / vh;
+
+  let sx = 0;
+  let sy = 0;
+  let sw = vw;
+  let sh = vh;
+
+  if (sourceAspect > targetAspect) {
+    // Camera source is wider than the visible 4:3 frame.
+    sw = vh * targetAspect;
+    sx = (vw - sw) / 2;
+  } else if (sourceAspect < targetAspect) {
+    // Camera source is taller than the visible 4:3 frame.
+    sh = vw / targetAspect;
+    sy = (vh - sh) / 2;
+  }
+
+  // Keep a high-resolution 4:3 image.
+  const OUTPUT_H = 1440;
+  const OUTPUT_W = Math.round(
+    OUTPUT_H * targetAspect
+  );
+
+  const scale =
+    OUTPUT_W / sw;
 
   canvas.width = OUTPUT_W;
   canvas.height = OUTPUT_H;
 
-  const ctx = canvas.getContext("2d", {
-    willReadFrequently: true,
-  });
+  const ctx =
+    canvas.getContext("2d", {
+      willReadFrequently: true,
+    });
 
   if (!ctx) return null;
 
+  // ---------------------------------------------------------
+  // Mirror selfie camera exactly like the live preview.
+  // ---------------------------------------------------------
+
   ctx.save();
 
-  // Preserve the existing selfie-camera mirror.
   if (facingMode === "user") {
-    ctx.translate(OUTPUT_W, 0);
+    ctx.translate(
+      OUTPUT_W,
+      0
+    );
+
     ctx.scale(-1, 1);
   }
 
-  // Draw the complete camera frame.
   ctx.drawImage(
     video,
-    0,
-    0,
-    vw,
-    vh,
+    sx,
+    sy,
+    sw,
+    sh,
     0,
     0,
     OUTPUT_W,
@@ -770,21 +809,39 @@ ctx.globalAlpha = 1;
 
   ctx.restore();
 
-  // Apply the selected filter after capturing the complete frame.
-  if (selectedFilter.ops.length > 0) {
-    const imageData = ctx.getImageData(
-      0,
-      0,
-      OUTPUT_W,
-      OUTPUT_H
+  // ---------------------------------------------------------
+  // Apply filter to the exact captured frame.
+  // ---------------------------------------------------------
+
+  if (
+    selectedFilter.ops.length > 0
+  ) {
+    const imageData =
+      ctx.getImageData(
+        0,
+        0,
+        OUTPUT_W,
+        OUTPUT_H
+      );
+
+    applyFilterOps(
+      imageData,
+      selectedFilter.ops
     );
 
-    applyFilterOps(imageData, selectedFilter.ops);
-
-    ctx.putImageData(imageData, 0, 0);
+    ctx.putImageData(
+      imageData,
+      0,
+      0
+    );
   }
 
-  // Draw the heart crown using the COMPLETE captured frame.
+  // ---------------------------------------------------------
+  // Heart filter.
+  // Coordinates are still in the original camera
+  // coordinate system, so map them into this exact crop.
+  // ---------------------------------------------------------
+
   if (
     layout.themeOverlay === "hearts" &&
     crownCurrentRef.current &&
@@ -796,115 +853,151 @@ ctx.globalAlpha = 1;
       )
     )
   ) {
-    const c = crownCurrentRef.current;
+    const c =
+      crownCurrentRef.current;
 
-    // Because we are no longer cropping the source image,
-    // camera coordinates map directly into the output.
-    const scale = OUTPUT_W / vw;
+    const outCx =
+      (c.cx - sx) * scale;
 
-    const outCx = c.cx * scale;
-    const outAnchorY = c.anchorY * scale;
-    const outHeadW = c.headWidth * scale;
+    const outAnchorY =
+      (c.anchorY - sy) * scale;
 
-    const mirrorX = (x: number) =>
+    const outHeadW =
+      c.headWidth * scale;
+
+    const mirrorX =
+      (x: number) =>
+        facingMode === "user"
+          ? OUTPUT_W - x
+          : x;
+
+    const headW =
+      outHeadW;
+
+    const heartW =
+      Math.max(
+        30,
+        Math.min(
+          150,
+          headW * 0.235
+        )
+      );
+
+    const now =
+      performance.now() / 1000;
+
+    ctx.textAlign =
+      "center";
+
+    ctx.textBaseline =
+      "middle";
+
+    ctx.imageSmoothingEnabled =
+      true;
+
+    const roll =
       facingMode === "user"
-        ? OUTPUT_W - x
-        : x;
+        ? -c.roll
+        : c.roll;
 
-    const headW = outHeadW;
-    const heartW = Math.max(
-      30,
-      Math.min(150, headW * 0.235)
-    );
+    for (
+      const item of CROWN_OFFSETS
+    ) {
+      const independentY =
+        Math.sin(
+          now *
+            item.speed +
+          item.phase
+        ) *
+        item.amp *
+        headW;
 
-    const now = performance.now() / 1000;
+      const localDX =
+        item.dx;
 
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.imageSmoothingEnabled = true;
+      const localDY =
+        item.dy +
+        independentY /
+          headW;
 
-    for (const item of CROWN_OFFSETS) {
-  const independentY =
-    Math.sin(
-      now * item.speed +
-      item.phase
-    ) *
-    item.amp *
-    headW;
+      const rotatedDX =
+        localDX *
+          Math.cos(roll) -
+        localDY *
+          Math.sin(roll);
 
-  const localDX =
-    item.dx;
+      const rotatedDY =
+        localDX *
+          Math.sin(roll) +
+        localDY *
+          Math.cos(roll);
 
-  const localDY =
-    item.dy +
-    independentY / headW;
+      const rawX =
+        outCx +
+        rotatedDX *
+          headW;
 
-  const displayRoll =
-    facingMode === "user"
-      ? -c.roll
-      : c.roll;
+      const x =
+        mirrorX(rawX);
 
-  const rotatedDX =
-    localDX * Math.cos(displayRoll) -
-    localDY * Math.sin(displayRoll);
+      const y =
+        outAnchorY +
+        rotatedDY *
+          headW;
 
-  const rotatedDY =
-    localDX * Math.sin(displayRoll) +
-    localDY * Math.cos(displayRoll);
+      const w =
+        heartW *
+        item.scale;
 
-  const rawX =
-    outCx +
-    rotatedDX * headW;
+      ctx.save();
 
-  const x =
-    mirrorX(rawX);
+      ctx.translate(
+        x,
+        y
+      );
 
-  const y =
-    outAnchorY +
-    rotatedDY * headW;
+      ctx.rotate(
+        roll +
+        (
+          item.rotate *
+          Math.PI /
+          180
+        )
+      );
 
-  const w =
-    heartW * item.scale;
+      ctx.globalAlpha =
+        item.opacity;
 
-  ctx.save();
+      if (
+        useNativeAppleEmojiRef.current
+      ) {
+        ctx.font =
+          `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
 
-  ctx.translate(x, y);
+        ctx.fillText(
+          HEART_EMOJI,
+          0,
+          0
+        );
+      } else if (
+        heartImgRef.current
+      ) {
+        const h =
+          w * 1.02;
 
-  ctx.rotate(
-    displayRoll +
-    (item.rotate * Math.PI) / 180
-  );
+        ctx.drawImage(
+          heartImgRef.current,
+          -w / 2,
+          -h / 2,
+          w,
+          h
+        );
+      }
 
-  ctx.globalAlpha =
-    item.opacity;
+      ctx.restore();
+    }
 
-  if (
-    useNativeAppleEmojiRef.current
-  ) {
-    ctx.font =
-      `${Math.round(w)}px ${HEART_FONT_FAMILY}`;
-
-    ctx.fillText(
-      HEART_EMOJI,
-      0,
-      0
-    );
-  } else if (heartImgRef.current) {
-    const h = w * 1.02;
-
-    ctx.drawImage(
-      heartImgRef.current,
-      -w / 2,
-      -h / 2,
-      w,
-      h
-    );
-  }
-
-  ctx.restore();
-}
-
-ctx.globalAlpha = 1;
+    ctx.globalAlpha = 1;
   }
 
   return canvas.toDataURL(
@@ -1263,7 +1356,7 @@ ctx.globalAlpha = 1;
 
         <div className="relative flex w-full items-center justify-center lg:w-auto">
         <div
-          style={{ aspectRatio: slotAspect }}
+          style={{ aspectRatio: CAMERA_ASPECT }}
           className="relative h-[min(54dvh,105vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
         >
           <video

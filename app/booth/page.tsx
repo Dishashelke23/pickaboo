@@ -28,6 +28,64 @@ const FILTERS: FilterOption[] = [
   { id: "highcontrast", label: "Bold B&W", css: "grayscale(1) contrast(1.5) brightness(0.95)", ops: [{ op: "grayscale", amount: 1 }, { op: "contrast", amount: 1.5 }, { op: "brightness", amount: 0.95 }] },
 ];
 
+type LightOption = {
+  id: string;
+  label: string;
+  color: string;
+  opacity: number;
+};
+
+const LIGHTS: LightOption[] = [
+  {
+    id: "natural",
+    label: "Natural",
+    color: "#FFFFFF",
+    opacity: 0,
+  },
+  {
+    id: "red",
+    label: "Red",
+    color: "#D71920",
+    opacity: 0.48,
+  },
+  {
+    id: "blue",
+    label: "Blue",
+    color: "#3157D5",
+    opacity: 0.42,
+  },
+  {
+    id: "purple",
+    label: "Purple",
+    color: "#7A3DB8",
+    opacity: 0.42,
+  },
+  {
+    id: "pink",
+    label: "Pink",
+    color: "#E84C8A",
+    opacity: 0.40,
+  },
+  {
+    id: "orange",
+    label: "Orange",
+    color: "#E87524",
+    opacity: 0.42,
+  },
+  {
+    id: "green",
+    label: "Green",
+    color: "#248A5A",
+    opacity: 0.40,
+  },
+  {
+    id: "yellow",
+    label: "Warm",
+    color: "#F0A51A",
+    opacity: 0.32,
+  },
+];
+
 const TIMER_OPTIONS = [3, 5, 10];
 const FACE_MODELS_URL = "/models";
 
@@ -306,6 +364,16 @@ const CAMERA_ASPECT = 4 / 3;
   const [selectedFilter, setSelectedFilter] = useState<FilterOption>(
     FILTERS.find((f) => f.id === filterParam) ?? FILTERS.find((f) => f.id === "noir") ?? FILTERS[0]
   );
+
+const lightParam = searchParams.get("light");
+
+const [selectedLight, setSelectedLight] =
+  useState<LightOption>(
+    LIGHTS.find(
+      (l) => l.id === lightParam
+    ) ?? LIGHTS[0]
+  );
+
   const [timerSeconds, setTimerSeconds] = useState(3);
 
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -814,28 +882,67 @@ ctx.globalAlpha = 1;
   // ---------------------------------------------------------
 
   if (
-    selectedFilter.ops.length > 0
-  ) {
-    const imageData =
-      ctx.getImageData(
-        0,
-        0,
-        OUTPUT_W,
-        OUTPUT_H
-      );
+  layout.id !== "story" &&
+  selectedFilter.ops.length > 0
+) {
+  const imageData = ctx.getImageData(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
 
-    applyFilterOps(
-      imageData,
-      selectedFilter.ops
-    );
+  applyFilterOps(
+    imageData,
+    selectedFilter.ops
+  );
 
-    ctx.putImageData(
-      imageData,
-      0,
-      0
-    );
-  }
+  ctx.putImageData(
+    imageData,
+    0,
+    0
+  );
+}
 
+
+  // Apply Colour Room lighting directly to the captured image.
+if (
+  layout.id === "story" &&
+  selectedLight.opacity > 0
+) {
+  ctx.save();
+
+  ctx.globalCompositeOperation = "color";
+  ctx.globalAlpha = selectedLight.opacity;
+  ctx.fillStyle = selectedLight.color;
+
+  ctx.fillRect(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
+
+  ctx.restore();
+
+  // Add a subtle darker ambient layer so the
+  // result feels like coloured room lighting,
+  // rather than a flat colour placed over the photo.
+  ctx.save();
+
+  ctx.globalCompositeOperation = "multiply";
+  ctx.globalAlpha = selectedLight.opacity * 0.18;
+  ctx.fillStyle = selectedLight.color;
+
+  ctx.fillRect(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
+
+  ctx.restore();
+}
   // ---------------------------------------------------------
   // Heart filter.
   // Coordinates are still in the original camera
@@ -1016,6 +1123,11 @@ ctx.globalAlpha = 1;
       sessionStorage.setItem("pickaboo-captures", JSON.stringify(newCaptures));
       sessionStorage.setItem("pickaboo-layout", layout.id);
       sessionStorage.setItem("pickaboo-filter", selectedFilter.id);
+
+      sessionStorage.setItem(
+          "pickaboo-light",
+           selectedLight.id
+           );
     }
     router.push("/review");
   }
@@ -1237,25 +1349,120 @@ ctx.globalAlpha = 1;
         OUTPUT_H
       );
 
-      if (selectedFilter.ops.length > 0) {
-        const imageData = ctx.getImageData(
-          0,
-          0,
-          OUTPUT_W,
-          OUTPUT_H
-        );
+      if (
+  layout.id !== "story" &&
+  selectedFilter.ops.length > 0
+) {
+  const imageData = ctx.getImageData(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
 
-        applyFilterOps(
-          imageData,
-          selectedFilter.ops
-        );
+  applyFilterOps(
+    imageData,
+    selectedFilter.ops
+  );
 
-        ctx.putImageData(
-          imageData,
-          0,
-          0
-        );
-      }
+  ctx.putImageData(
+    imageData,
+    0,
+    0
+  );
+}
+
+if (
+  layout.id === "story" &&
+  selectedLight.opacity > 0
+) {
+  ctx.save();
+
+  ctx.globalCompositeOperation =
+    "color";
+
+  ctx.globalAlpha =
+    selectedLight.opacity;
+
+  ctx.fillStyle =
+    selectedLight.color;
+
+  ctx.fillRect(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
+
+  ctx.restore();
+
+  // Slightly darken the room-light effect so it feels
+  // like colored ambient lighting rather than a flat overlay.
+  ctx.save();
+
+  ctx.globalCompositeOperation =
+    "multiply";
+
+  ctx.globalAlpha =
+    selectedLight.opacity * 0.18;
+
+  ctx.fillStyle =
+    selectedLight.color;
+
+  ctx.fillRect(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
+
+  ctx.restore();
+}
+
+if (
+  layout.id === "story" &&
+  selectedLight.opacity > 0
+) {
+  ctx.save();
+
+  ctx.globalCompositeOperation =
+    "color";
+
+  ctx.globalAlpha =
+    selectedLight.opacity;
+
+  ctx.fillStyle =
+    selectedLight.color;
+
+  ctx.fillRect(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
+
+  ctx.restore();
+
+  ctx.save();
+
+  ctx.globalCompositeOperation =
+    "multiply";
+
+  ctx.globalAlpha =
+    selectedLight.opacity * 0.18;
+
+  ctx.fillStyle =
+    selectedLight.color;
+
+  ctx.fillRect(
+    0,
+    0,
+    OUTPUT_W,
+    OUTPUT_H
+  );
+
+  ctx.restore();
+}
 
       resolve(
         off.toDataURL(
@@ -1331,42 +1538,130 @@ ctx.globalAlpha = 1;
             tall vertical column beside the frame at desktop — no absolute
             positioning, so nothing can ever overlap or hide behind the frame. */}
         <div className="flex w-full max-w-[420px] flex-row items-center gap-3 overflow-x-auto overflow-y-hidden px-2 py-1 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)] lg:w-auto lg:max-w-none lg:flex-col lg:justify-start lg:gap-3 lg:overflow-x-visible lg:overflow-y-auto lg:px-2 lg:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {FILTERS.map((f) => {
-            const isSelected = selectedFilter.id === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => !isCapturing && setSelectedFilter(f)}
-                disabled={isCapturing}
-                className="group flex flex-shrink-0 flex-col items-center gap-0.5 disabled:opacity-40"
-              >
-                <span
-                  style={{ filter: f.css }}
-                  className={`h-7 w-7 rounded-full bg-gradient-to-br from-bubblegum via-flashbulb to-mint transition-all duration-200 ease-out group-hover:scale-110 sm:h-9 sm:w-9 md:h-10 md:w-10 ${
-                    isSelected ? "scale-110 ring-4 ring-curtain ring-offset-2 ring-offset-paper" : "ring-1 ring-ink/10"
-                  }`}
-                />
-                <span className={`hidden font-[family-name:var(--font-mono)] text-[9px] text-ink/60 transition-opacity duration-200 md:block ${isSelected ? "opacity-30" : "opacity-100"}`}>
-                  {f.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+  {layout.id === "story"
+    ? LIGHTS.map((light) => {
+        const isSelected =
+          selectedLight.id === light.id;
+
+        return (
+          <button
+            key={light.id}
+            onClick={() =>
+              !isCapturing &&
+              setSelectedLight(light)
+            }
+            disabled={isCapturing}
+            className="group flex flex-shrink-0 flex-col items-center gap-0.5 disabled:opacity-40"
+          >
+            <span
+              className={`h-7 w-7 rounded-full transition-all duration-200 ease-out group-hover:scale-110 sm:h-9 sm:w-9 md:h-10 md:w-10 ${
+                isSelected
+                  ? "scale-110 ring-4 ring-curtain ring-offset-2 ring-offset-paper"
+                  : "ring-1 ring-ink/10"
+              }`}
+              style={{
+                backgroundColor:
+                  light.color,
+                boxShadow:
+                  light.id === "natural"
+                    ? "inset 0 0 0 3px #FBF6EC"
+                    : undefined,
+              }}
+            />
+
+            <span
+              className={`hidden font-[family-name:var(--font-mono)] text-[9px] text-ink/60 md:block ${
+                isSelected
+                  ? "opacity-30"
+                  : "opacity-100"
+              }`}
+            >
+              {light.label}
+            </span>
+          </button>
+        );
+      })
+    : FILTERS.map((f) => {
+        const isSelected =
+          selectedFilter.id === f.id;
+
+        return (
+          <button
+            key={f.id}
+            onClick={() =>
+              !isCapturing &&
+              setSelectedFilter(f)
+            }
+            disabled={isCapturing}
+            className="group flex flex-shrink-0 flex-col items-center gap-0.5 disabled:opacity-40"
+          >
+            <span
+              style={{ filter: f.css }}
+              className={`h-7 w-7 rounded-full bg-gradient-to-br from-bubblegum via-flashbulb to-mint transition-all duration-200 ease-out group-hover:scale-110 sm:h-9 sm:w-9 md:h-10 md:w-10 ${
+                isSelected
+                  ? "scale-110 ring-4 ring-curtain ring-offset-2 ring-offset-paper"
+                  : "ring-1 ring-ink/10"
+              }`}
+            />
+
+            <span
+              className={`hidden font-[family-name:var(--font-mono)] text-[9px] text-ink/60 md:block ${
+                isSelected
+                  ? "opacity-30"
+                  : "opacity-100"
+              }`}
+            >
+              {f.label}
+            </span>
+          </button>
+        );
+      })}
+</div>
 
         <div className="relative flex w-full items-center justify-center lg:w-auto">
         <div
           style={{ aspectRatio: CAMERA_ASPECT }}
-          className="relative h-[min(54dvh,105vw)] w-auto flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)]"
+          className="relative h-auto w-[min(92vw,calc(100dvh-280px))] max-w-full flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*0.75),calc(100dvh-220px),620px)] lg:w-auto"
         >
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            style={{ filter: selectedFilter.css }}
+            style={{
+              filter:
+               layout.id === "story"
+               ? "none"
+               : selectedFilter.css,
+              }}
             className={`h-full w-full object-cover transition-opacity duration-300 ${status === "ready" ? "opacity-100" : "opacity-0"} ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
           />
+
+          {layout.id === "story" &&
+  selectedLight.opacity > 0 && (
+    <div
+      className="pointer-events-none absolute inset-0 z-10"
+      style={{
+        backgroundColor: selectedLight.color,
+        opacity: selectedLight.opacity,
+        mixBlendMode: "color",
+      }}
+    />
+  )}
+
+          {layout.id === "story" &&
+  selectedLight.opacity > 0 && (
+    <div
+      className="pointer-events-none absolute inset-0 z-10"
+      style={{
+        backgroundColor:
+          selectedLight.color,
+        opacity:
+          selectedLight.opacity,
+        mixBlendMode: "color",
+      }}
+    />
+  )}
 
           {layout.themeOverlay === "hearts" && (
             <canvas

@@ -27,7 +27,7 @@ export default function ReviewPage() {
     sessionStorage.removeItem("pickaboo-captures");
     sessionStorage.removeItem("pickaboo-layout");
     sessionStorage.removeItem("pickaboo-filter");
-    router.push("/");
+    router.push("/booth");
   }
 
   function handleContinue() {

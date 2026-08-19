@@ -24,7 +24,7 @@ export const LAYOUTS: LayoutOption[] = [
   { id: "vintage", name: "Vintage Layout", poses: 4, cols: 1, rows: 4, aspect: "2 / 6", aspectValue: 2 / 6, sizeLabel: "6×2 Strip", footerSize: "small", padding: 0, gap: 0, themeOverlay: null },
   { id: "grid", name: "Grid Layout", poses: 6, cols: 2, rows: 3, aspect: "4 / 6", aspectValue: 4 / 6, sizeLabel: "6×4 Strip", footerSize: "none", padding: 4, gap: 2, themeOverlay: null },
   { id: "duo", name: "Duo Layout", poses: 4, cols: 2, rows: 2, aspect: "1 / 1", aspectValue: 1, sizeLabel: "4×4 Strip", footerSize: "none", padding: 4, gap: 3, themeOverlay: null },
-  { id: "story", name: "Story Layout", poses: 4, cols: 1, rows: 4, aspect: "9 / 16", aspectValue: 9 / 16, sizeLabel: "9×16 Story", footerSize: "none", padding: 4, gap: 2, themeOverlay: null },
+  { id: "story", name: "Color Room", poses: 3, cols: 1, rows: 3, aspect: "9 / 16", aspectValue: 9 / 16, sizeLabel: "9×16 Story", footerSize: "none", padding: 4, gap: 2, themeOverlay: null },
 ];
 
 export function getLayout(id: string | null): LayoutOption {

@@ -142,39 +142,98 @@ function buildLayoutSlots(layout: LayoutOption, count: number): Slot[] {
 
   // Vertical photo-strip layouts
   if (cols === 1) {
-    const availableWidth = 100 - padding * 2;
+  const availableWidth =
+    100 - padding * 2;
 
-    // Convert the photo's real aspect ratio into a percentage
-    // of the strip height.
-    const photoHeight =
-      (availableWidth * layout.aspectValue) / photoAspect;
+  const usableHeight =
+    100 -
+    padding * 2 -
+    footerSpace;
 
-    const totalPhotosHeight = photoHeight * count;
-    const totalGaps = gap * (count - 1);
+  const stripGap =
+  layout.id === "vintage" ||
+  layout.id === "story"
+    ? 0
+    : gap;
 
-    const usableHeight =
-      100 -
-      padding * 2 -
-      footerSpace;
+const totalGaps =
+  stripGap * (count - 1);
 
-    const totalUsedHeight =
-      totalPhotosHeight + totalGaps;
+  // Trio gets larger photo areas so the three
+  // photographs occupy much more of the strip.
+  //
+  // Keep a small amount of breathing room at the top,
+  // with slightly more room reserved at the bottom for
+  // the Pickaboo footer.
+ const isFullStrip =
+  layout.id === "trio" ||
+  layout.id === "mini" ||
+  layout.id === "vintage"||
+  layout.id === "story";
 
-    // Center the complete photo stack vertically inside
-    // the available area, just like the original strip.
-    const extraSpace =
-      Math.max(0, usableHeight - totalUsedHeight);
+const topSpace =
+  isFullStrip
+    ? 3
+    : padding;
 
-    const startY =
-      padding + extraSpace / 2;
+const bottomSpace =
+  isFullStrip
+    ? 6
+    : padding + footerSpace;
 
-    return Array.from({ length: count }, (_, i) => ({
+  const photoHeight =
+  isFullStrip
+    ? (
+        100 -
+        topSpace -
+        bottomSpace -
+        totalGaps
+      ) / count
+    : (
+        availableWidth *
+        layout.aspectValue
+      ) / photoAspect;
+
+  const totalPhotosHeight =
+    photoHeight * count;
+
+  const totalUsedHeight =
+    totalPhotosHeight +
+    totalGaps;
+
+  const startY =
+  isFullStrip
+    ? topSpace
+    : padding +
+      Math.max(
+        0,
+        (
+          usableHeight -
+          totalUsedHeight
+        ) / 2
+      );
+
+  return Array.from(
+    { length: count },
+    (_, i) => ({
       xPct: padding,
-      yPct: startY + i * (photoHeight + gap),
-      wPct: availableWidth,
-      hPct: photoHeight,
-    }));
-  }
+
+      yPct:
+  startY +
+  i *
+    (
+      photoHeight +
+      stripGap
+    ),
+
+      wPct:
+        availableWidth,
+
+      hPct:
+        photoHeight,
+    })
+  );
+}
 
   // Grid / non-strip layouts
   const cellWidth =
@@ -445,16 +504,23 @@ export default function CustomizePage() {
     }}
   >
     <img
-      src={captures[i]}
-      alt={`Shot ${i + 1}`}
-      draggable={false}
-      className={`h-full w-full object-cover ${
-  frameStyle.photoBorder ? "ring-1 ring-ink/15" : ""
-}`}
-      style={{
-        borderRadius: frameStyle.photoRadius,
-      }}
-    />
+  src={captures[i]}
+  alt={`Shot ${i + 1}`}
+  draggable={false}
+  className={`h-full w-full object-cover ${
+    frameStyle.photoBorder ? "ring-1 ring-ink/15" : ""
+  }`}
+  style={{
+    borderRadius:
+      layout.id === "story"
+        ? i === 0
+          ? `${frameStyle.photoRadius}px ${frameStyle.photoRadius}px 0 0`
+          : i === captures.length - 1
+          ? `0 0 ${frameStyle.photoRadius}px ${frameStyle.photoRadius}px`
+          : "0"
+        : `${frameStyle.photoRadius}px`,
+  }}
+/>
   </div>
 ))}
 

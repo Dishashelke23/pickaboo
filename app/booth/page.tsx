@@ -14,18 +14,115 @@ type FilterOp =
   | { op: "brightness"; amount: number }
   | { op: "hueRotate"; degrees: number };
 
-type FilterOption = { id: string; label: string; css: string; ops: FilterOp[] };
+type FilterOption = {
+  id: string;
+  label: string;
+  css: string;
+  ops: FilterOp[];
+  preview: string;
+};
 
 const FILTERS: FilterOption[] = [
-  { id: "original", label: "Original", css: "none", ops: [] },
-  { id: "noir", label: "Noir", css: "grayscale(1) contrast(1.15)", ops: [{ op: "grayscale", amount: 1 }, { op: "contrast", amount: 1.15 }] },
-  { id: "vintage", label: "Vintage", css: "sepia(0.35) contrast(0.9) brightness(1.05) saturate(1.3)", ops: [{ op: "sepia", amount: 0.35 }, { op: "contrast", amount: 0.9 }, { op: "brightness", amount: 1.05 }, { op: "saturate", amount: 1.3 }] },
-  { id: "dreamy", label: "Dreamy", css: "brightness(1.12) saturate(1.35) contrast(0.9) blur(0.3px)", ops: [{ op: "brightness", amount: 1.12 }, { op: "saturate", amount: 1.35 }, { op: "contrast", amount: 0.9 }] },
-  { id: "pop", label: "Pop", css: "saturate(1.7) contrast(1.15) brightness(1.05)", ops: [{ op: "saturate", amount: 1.7 }, { op: "contrast", amount: 1.15 }, { op: "brightness", amount: 1.05 }] },
-  { id: "cool", label: "Cool Tone", css: "hue-rotate(180deg) saturate(1.15) brightness(1.02)", ops: [{ op: "hueRotate", degrees: 180 }, { op: "saturate", amount: 1.15 }, { op: "brightness", amount: 1.02 }] },
-  { id: "warm", label: "Warm Tone", css: "sepia(0.2) saturate(1.4) brightness(1.05)", ops: [{ op: "sepia", amount: 0.2 }, { op: "saturate", amount: 1.4 }, { op: "brightness", amount: 1.05 }] },
-  { id: "fade", label: "Faded", css: "contrast(0.85) brightness(1.1) saturate(0.6)", ops: [{ op: "contrast", amount: 0.85 }, { op: "brightness", amount: 1.1 }, { op: "saturate", amount: 0.6 }] },
-  { id: "highcontrast", label: "Bold B&W", css: "grayscale(1) contrast(1.5) brightness(0.95)", ops: [{ op: "grayscale", amount: 1 }, { op: "contrast", amount: 1.5 }, { op: "brightness", amount: 0.95 }] },
+  {
+    id: "original",
+    label: "Original",
+    css: "none",
+    ops: [],
+    preview: "/filters/original.jpg",
+  },
+
+  
+  {
+    id: "noir",
+    label: "Noir",
+    css: "grayscale(1) contrast(1.15)",
+    ops: [
+      { op: "grayscale", amount: 1 },
+      { op: "contrast", amount: 1.15 },
+    ],
+    preview: "/filters/noir.jpg",
+  },
+
+  {
+    id: "film",
+    label: "Film",
+    css: "sepia(0.12) contrast(2.4) brightness(1.0) saturate(1.5)",
+    ops: [
+      { op: "sepia", amount: 0.12 },
+      { op: "contrast", amount: 2.4 },
+      { op: "brightness", amount: 1.0 },
+      { op: "saturate", amount: 1.5 },
+    ],
+    preview: "/filters/film.jpg",
+  },
+
+  {
+    id: "dreamy",
+    label: "Dreamy",
+    css: "brightness(1.8) saturate(1.12) contrast(0.88) blur(1px)",
+    ops: [
+      { op: "brightness", amount: 1.8 },
+      { op: "saturate", amount: 1.12 },
+      { op: "contrast", amount: 0.88 },
+    ],
+    preview: "/filters/dreamy.jpg",
+  },
+
+  {
+    id: "flash",
+    label: "Flash",
+    css: "brightness(2.08) contrast(1.12) saturate(1.05)",
+    ops: [
+      { op: "brightness", amount: 2.08 },
+      { op: "contrast", amount: 1.12 },
+      { op: "saturate", amount: 1.05 },
+    ],
+    preview: "/filters/flash.jpg",
+  },
+
+  {
+    id: "retro",
+    label: "Retro",
+    css: "sepia(0.7) contrast(1.90) brightness(1.06) saturate(1.82)",
+    ops: [
+      { op: "sepia", amount: 0.7 },
+      { op: "contrast", amount: 1.90 },
+      { op: "brightness", amount: 1.06 },
+      { op: "saturate", amount: 1.82 },
+    ],
+    preview: "/filters/retro.jpg",
+  },
+
+
+  {
+    id: "polaroid",
+    label: "Polaroid",
+    css: "sepia(0.3) saturate(1.90) contrast(1.92) brightness(1.2) hue-rotate(10deg)",
+    ops: [
+      { op: "sepia", amount: 0.3 },
+      { op: "saturate", amount: 1.90 },
+      { op: "contrast", amount: 1.92 },
+      { op: "brightness", amount: 1.2 },
+      { op: "hueRotate", degrees: 10 },
+    ],
+    preview: "/filters/polaroid.jpg",
+  },
+
+
+  {
+    id: "cool",
+    label: "Cool",
+    css: "hue-rotate(15deg) saturate(1.08) brightness(1.03) contrast(0.96)",
+    ops: [
+      { op: "hueRotate", degrees: 25 },
+      { op: "saturate", amount: 1.08 },
+      { op: "brightness", amount: 1.03 },
+      { op: "contrast", amount: 0.96 },
+    ],
+    preview: "/filters/cool.jpg",
+  },
+
+  
 ];
 
 type LightOption = {
@@ -1595,14 +1692,16 @@ if (
             disabled={isCapturing}
             className="group flex flex-shrink-0 flex-col items-center gap-0.5 disabled:opacity-40"
           >
-            <span
-              style={{ filter: f.css }}
-              className={`h-7 w-7 rounded-full bg-gradient-to-br from-bubblegum via-flashbulb to-mint transition-all duration-200 ease-out group-hover:scale-110 sm:h-9 sm:w-9 md:h-10 md:w-10 ${
-                isSelected
-                  ? "scale-110 ring-4 ring-curtain ring-offset-2 ring-offset-paper"
-                  : "ring-1 ring-ink/10"
-              }`}
-            />
+            <img
+             src={f.preview}
+             alt={`${f.label} filter preview`}
+             draggable={false}
+             className={`h-7 w-7 rounded-full object-cover transition-all duration-200 ease-out group-hover:scale-110 sm:h-9 sm:w-9 md:h-10 md:w-10 ${
+             isSelected
+             ? "scale-110 ring-4 ring-curtain ring-offset-2 ring-offset-paper"
+             : "ring-1 ring-ink/10"
+            }`}
+           />
 
             <span
               className={`hidden font-[family-name:var(--font-mono)] text-[9px] text-ink/60 md:block ${

@@ -380,13 +380,95 @@ export default function CustomizePage() {
     setElements((prev) =>
       prev.map((el) => {
         if (el.id !== activeAction.id) return el;
-        if (activeAction.type === "drag") {
-          const xPct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-          const yPct = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
-          return { ...el, xPct, yPct };
-        }
-        const max = el.kind === "text" ? 72 : 160;
-        return { ...el, size: Math.min(max, Math.max(14, el.size + e.movementY)) };
+         if (activeAction.type === "drag") {
+  const pointerXPct =
+    ((e.clientX - rect.left) / rect.width) * 100;
+
+  const pointerYPct =
+    ((e.clientY - rect.top) / rect.height) * 100;
+
+  if (el.kind === "sticker") {
+    // The sticker is positioned using its CENTER.
+    // Keep half of its width inside the strip so
+    // the whole sticker remains visible at the edges.
+    const halfStickerWidthPct =
+      (el.size / rect.width) * 50;
+
+    const xPct = Math.min(
+      100 - halfStickerWidthPct,
+      Math.max(
+        halfStickerWidthPct,
+        pointerXPct
+      )
+    );
+
+    const yPct = Math.min(
+      100,
+      Math.max(0, pointerYPct)
+    );
+
+    return {
+      ...el,
+      xPct,
+      yPct,
+    };
+  }
+
+  // Text keeps the original unrestricted behavior.
+  return {
+    ...el,
+    xPct: Math.min(
+      100,
+      Math.max(0, pointerXPct)
+    ),
+    yPct: Math.min(
+      100,
+      Math.max(0, pointerYPct)
+    ),
+  };
+}
+         const max = el.kind === "text" ? 72 : 160;
+
+const newSize = Math.min(
+  max,
+  Math.max(14, el.size + e.movementY)
+);
+
+if (el.kind === "sticker") {
+  const halfWidthPct =
+    (newSize / rect.width) * 50;
+
+  const halfHeightPct =
+    (newSize / rect.height) * 50;
+
+  const newXPct = Math.min(
+    100 - halfWidthPct,
+    Math.max(
+      halfWidthPct,
+      el.xPct
+    )
+  );
+
+  const newYPct = Math.min(
+    100 - halfHeightPct,
+    Math.max(
+      halfHeightPct,
+      el.yPct
+    )
+  );
+
+  return {
+    ...el,
+    size: newSize,
+    xPct: newXPct,
+    yPct: newYPct,
+  };
+}
+
+return {
+  ...el,
+  size: newSize,
+};
       })
     );
   }

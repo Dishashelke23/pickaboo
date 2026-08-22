@@ -1630,11 +1630,11 @@ if (
         )}
       </div>
 
-      <div className="relative flex w-full flex-col items-center justify-start gap-5 lg:flex-row lg:items-stretch lg:justify-center lg:gap-8">
+      <div className="relative flex w-full flex-col items-center justify-start gap-5 lg:grid lg:grid-cols-[180px_minmax(0,1fr)_180px] lg:items-center lg:gap-0">
         {/* Filters: normal horizontal-scroll row above the frame on mobile/tablet,
             tall vertical column beside the frame at desktop — no absolute
             positioning, so nothing can ever overlap or hide behind the frame. */}
-        <div className="flex w-full max-w-[420px] flex-row items-center gap-3 overflow-x-auto overflow-y-hidden px-2 py-1 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)] lg:w-auto lg:max-w-none lg:flex-col lg:justify-start lg:gap-3 lg:overflow-x-visible lg:overflow-y-auto lg:px-2 lg:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex w-full max-w-[420px] flex-row items-center gap-3 overflow-x-auto overflow-y-hidden px-2 py-1 lg:col-start-1 lg:h-[min(calc((100vw-150px)*1.3333),calc(100dvh-220px),620px)] lg:w-full lg:max-w-none lg:flex-col lg:items-center lg:justify-start lg:gap-3 lg:overflow-x-visible lg:overflow-y-auto lg:px-2 lg:py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
   {layout.id === "story"
     ? LIGHTS.map((light) => {
         const isSelected =
@@ -1717,7 +1717,7 @@ if (
       })}
 </div>
 
-        <div className="relative flex w-full items-center justify-center lg:w-auto">
+        <div className="relative flex w-full items-center justify-center lg:col-start-2 lg:w-full">
         <div
           style={{ aspectRatio: CAMERA_ASPECT }}
           className="relative h-auto w-[min(92vw,calc(100dvh-280px))] max-w-full flex-shrink-0 overflow-hidden rounded-3xl border-4 border-curtain bg-ink shadow-2xl sm:border-8 lg:h-[min(calc((100vw-150px)*0.75),calc(100dvh-220px),620px)] lg:w-auto"
@@ -1808,7 +1808,7 @@ if (
         </div>
     </div>
 
-        <div className="flex w-full flex-shrink-0 flex-col items-center justify-center gap-3 lg:w-auto lg:gap-3">
+        <div className="flex w-full flex-shrink-0 flex-col items-center justify-center gap-3 lg:col-start-3 lg:w-full lg:gap-3">
           <button
             onClick={runSession}
             disabled={isCapturing || status !== "ready"}
